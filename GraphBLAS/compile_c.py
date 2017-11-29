@@ -1,99 +1,150 @@
-import os, sys, subprocess, importlib, inspect
+import os
+import sys
+import subprocess
+import importlib
+import inspect
+from collections import OrderedDict
+import hashlib
 import numpy as np
 
 # dictionary of GraphBLAS modules
-_gb = {}
+_gb = dict()
 
 # mapping from python/numpy types to c types
-_types = {bool: "bool",
-          int: "int64_t",
-          float: "double",
-          np.bool: "bool",
-          np.int8: "int8_t",
-          np.uint8: "uint8_t",
-          np.int16: "int16_t",
-          np.uint16: "uint16_t",
-          np.int32: "int32_t",
-          np.uint32: "uint32_t",
-          np.int64: "int64_t",
-          np.uint64: "uint64_t",
-          np.float32: "float",
-          np.float64: "double"}
-
-_algs = {None: 1,
-        "BFS": 2,
-        "SSSP": 3,
-        "TRICOUNT": 4}
-
-# get environment variables
-_PYBIND = (
-        subprocess.check_output(["python3", "-m", "pybind11", "--includes"])
-        .decode("ascii").strip().split(" ")
-    )
-
-_PYEXT = (
-        subprocess.check_output(["python3-config", "--extension-suffix"])
-        .decode("ascii").strip()
-    )
+# ordered by typecasting heirarchy
+_types = OrderedDict([
+        (None, ""),
+        (bool, "bool"),
+        (np.bool_, "bool"),
+        (np.int8, "int8_t"),
+        (np.uint8, "uint8_t"),
+        (np.int16, "int16_t"),
+        (np.uint16, "uint16_t"),
+        (np.int32, "int32_t"),
+        (np.uint32, "uint32_t"),
+        (int, "int64_t"),
+        (np.int64, "int64_t"),
+        (np.uint64, "uint64_t"),
+        (np.float32, "float"),
+        (float, "double"),
+        (np.float64, "double")
+])
 
 # get module directory
 _CWD = inspect.getfile(inspect.currentframe()).rsplit("/", 1)[0]
 sys.path.append(_CWD)
 _MODDIR = os.path.abspath(_CWD + "/lib")
 
-_CWD = os.getcwd()
+# get environment variables
+_PYBIND = (
+        subprocess.check_output(["python3", "-m", "pybind11", "--includes"])
+        .decode("ascii").strip().split(" ")
+)
 
-def _get_module(dtype, alg=None, semiring=(None,None,None)):
-    module = "gb_%s" % _types[dtype]
-    if alg is not None: module += "_" + alg
-    if semiring != (None,None,None): module += "_" + "_".join(map(str,semiring))
+_PYEXT = (
+        subprocess.check_output(["python3-config", "--extension-suffix"])
+        .decode("ascii").strip()
+)
 
+def get_container(atype):
+    module = "at_" + _types[atype]
+    module = hashlib.sha1(module.encode('utf-8')).hexdigest()
+    return _get_module("container", module, atype=_types[atype])
+
+def get_algorithm(atype, btype, algorithm):
+    c_types = {"atype": _types[atype]}
+    if btype is not None:
+        c_types["btype"] = _types[btype]
+        # upcast ctype to largest of atype and btype
+        py_types = list(_types.keys())
+        c_types["ctype"] = list(_types.items())[max(
+            py_types.index(atype), 
+            py_types.index(btype)
+        )][1]
+    else: c_types["btype"] = ""
+
+    module  = "at_" + _types[atype]\
+            + "bt_" + _types[btype]\
+            + "al_" + algorithm
+    module = hashlib.sha1(module.encode('utf-8')).hexdigest()
+
+    args = ctype
+    args.update({"alg": algorithm})
+    return _get_module("algorithm", module, args)
+
+def get_semiring(atype, btype, semiring, accum=None, mask=None):
+    c_types = {
+            "atype": _types[atype],
+            "btype": _types[btype]
+    }
+    # upcast ctype to largest of atype and btype
+    py_types = list(_types.keys())
+    c_types["ctype"] = list(_types.items())[max(
+            py_types.index(atype), 
+            py_types.index(btype)
+    )][1]
+    module  = "at_" + _types[atype]\
+            + "bt_" + _types[btype]\
+            + "sr_" + "".join(map(str,semiring))\
+            + ("ac_" + accum if accum is not None else "")
+    # generate unique module name from compiler parameters
+    module = hashlib.sha1(module.encode('utf-8')).hexdigest()
+
+    args = semiring._asdict()
+    args.update(c_types)
+    # set default accumulate operator 
+    if accum is None:
+        args["accum_binaryop"] = "NoAccumulate"
+        args["no_accum"] = "1" 
+    else: 
+        args["accum_binaryop"] = accum
+        args["no_accum"] = "0"
+        # set default min identity
+    args["min_idnty"] = "1" if semiring.add_identity == "MinIdentity" else "0"
+    return _get_module("accumulate", module, **args)
+
+def _get_module(target, module, **kwargs):
     # first look in dictionary
     try:
         return _gb[module]
     except:
         # then check directory
         try:
-            _gb[module] = importlib.import_module("GraphBLAS.lib.%s" % module)
+            _gb[module] = importlib.import_module("GraphBLAS.lib." + module)
             return _gb[module]
         # finally build and return module
         except:
-            target = None
-            if alg is not None: target = "algorithm"
-            elif semiring != (None, None, None): target = "semiring"
-            else: target = "container"
-            _gb[module] = _build_module(target, module, dtype, alg, semiring)
-            return _gb[module]
+            return _build_module(target, module, **kwargs)
 
-def _build_module(target, module, dtype, alg, semiring):
+#def _build_module(target, module, dtype, alg, semiring, accum):
+def _build_module(target, module, **kwargs):
+    print(kwargs)
+    # create directory for modules
     if not os.path.exists(_MODDIR):
         os.makedirs(_MODDIR)
 
     FNULL = open(os.devnull, 'w')
-    subprocess.call(["make", 
-        target, 
-        "MODULE=%s" % module,
-        "DTYPE=%s" % _types[dtype],
-        "ALG=%s" % alg,
-        "ADD_BINARYOP=%s" % semiring[0],
-        "ADD_IDENTITY=%s" % semiring[1],
-        "MULT_BINARYOP=%s" % semiring[2],
-        "MNAME=%s" % "_".join(map(str,semiring[:2])),
-        "SRNAME=%s" % "_".join(map(str,semiring)),
-        "PYBIND1=%s" % _PYBIND[0], 
-        "PYBIND2=%s" % _PYBIND[1], 
-        "PYBIND3=%s" % _PYBIND[2], 
-        "PYEXT=%s" % _PYEXT, 
-        "DIR=%s/" % _MODDIR], cwd=_MODDIR)#, stdout=FNULL)
-        
-    return importlib.import_module("lib.%s" % module)
+    cmd = ["make", 
+           target, 
+           "MODULE=" + module,
+           "PYBIND1=" + _PYBIND[0],
+           "PYBIND2=" + _PYBIND[1],
+           "PYBIND3=" + _PYBIND[2],
+           "PYEXT=" + _PYEXT,
+           "DIR=" + _MODDIR + "/"]
+    cmd += [arg.upper() + "=" + val for arg, val in kwargs.items()]
+    subprocess.call(cmd, cwd=_MODDIR)#, stdout=FNULL)
 
-def _get_type(a):
+    # cache module for future access
+    _gb[module] = importlib.import_module("lib.%s" % module)
+    return _gb[module]
+       
+def _get_type(container):
     # if a is a numpy/scipy array
-    try:
-        return a.dtype.type
+    try: return container.dtype.type
     # if a is an N-D list/array
     except:
-        while type(a) not in _types:
-            a = a[0]
-        return type(a)
+        # drill down to data in container
+        while type(container) not in _types: 
+            container = container[0]
+        return type(container)
