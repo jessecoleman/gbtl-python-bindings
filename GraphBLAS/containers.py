@@ -29,12 +29,23 @@ class _VectorOps(object):
 
 class Matrix(_MatrixOps):
 
-    def __init__(self, m=None, dtype=None, shape=None):
+    def __init__(self, m=None, shape=None, dtype=None):
         if m is None and (shape is None or dtype is None):
             raise ValueError("Please provide matrix or shape and dtype")
-        # get C++ module with declaration for Matrix class
-        self.dtype = dtype if dtype is not None else c._get_type(m)
-        module = c.get_container(self.dtype)
+
+        self._mask = None
+
+        # copy constructor
+        if isinstance(m, Matrix):
+            self.shape = m.shape
+            self.dtype = m.dtype
+            self.mat = m.mat
+            return
+
+        else:
+            # get C++ module with declaration for Matrix class
+            self.dtype = dtype if dtype is not None else c._get_type(m)
+            module = c.get_container(self.dtype)
 
         # construct from scipy sparse matrix
         if (sparse.issparse(m)):
@@ -65,16 +76,29 @@ class Matrix(_MatrixOps):
         return str(self.mat)
 
     def __getitem__(self, item):
+        # TODO typecheck for boolean matrix
         if isinstance(item, Matrix):
-            # TODO implement masking
-            pass
+            self._mask = item.mat
+        return self
 
-    def __setitem__(self, item):
+    # self[item] += assign
+    # self.__setitem__(self.__getitem__(item).__iadd__(assign))
+    def __setitem__(self, item, assign):
+        print("set item")
+        print(item._mask)
         if isinstance(item, Matrix):
-            pass
+            self._mask = item.mat
+        elif isinstance(item, tuple):
+            self._mask = item.mat
+            self._repl = True
 
+    # TODO double check that ~ copies instead of referencing
     def __invert__(self):
-        return ~self.mat
+        mat = self.mat
+        self.mat = ~self.mat
+        inverted = Matrix(self)
+        self.mat = mat
+        return inverted
 
 class Vector(_VectorOps):
 

@@ -46,6 +46,14 @@ _PYEXT = (
         .decode("ascii").strip()
 )
 
+# upcast ctype to largest of atype and btype
+def upcast(atype, btype):
+    py_types = list(_types.keys())
+    return list(_types.items())[max(
+            py_types.index(atype), 
+            py_types.index(btype)
+    )]
+
 def get_container(atype):
     module = "at_" + _types[atype]
     module = hashlib.sha1(module.encode('utf-8')).hexdigest()
@@ -55,12 +63,7 @@ def get_algorithm(atype, btype, algorithm):
     c_types = {"atype": _types[atype]}
     if btype is not None:
         c_types["btype"] = _types[btype]
-        # upcast ctype to largest of atype and btype
-        py_types = list(_types.keys())
-        c_types["ctype"] = list(_types.items())[max(
-            py_types.index(atype), 
-            py_types.index(btype)
-        )][1]
+        c_types["ctype"] = upcast(atype, btype)[1]
     else: c_types["btype"] = ""
 
     module  = "at_" + _types[atype]\
@@ -72,17 +75,39 @@ def get_algorithm(atype, btype, algorithm):
     args.update({"alg": algorithm})
     return _get_module("algorithm", module, args)
 
+def get_apply(atype, op, const, accum):
+    c_types = {"atype": _types[atype], "ctype": _types[atype]}
+    module  = "at_" + _types[atype]\
+            + "ap_" + op\
+            + ("const_" + str(const) if const is not None else "")\
+            + ("ac_" + accum if accum is not None else "")
+    # generate unique module name from compiler parameters
+    module = hashlib.sha1(module.encode('utf-8')).hexdigest()
+
+    args = {"apply_op": op}
+    args.update(c_types)
+    # if converting binary op to unary op
+    if const is None:
+        args["bound_second"] = "0"
+    else: 
+        args["bound_second"] = "1"
+        args["bound_const"] = str(const)
+    # set default accumulate operator 
+    if accum is None:
+        args["accum_binaryop"] = "NoAccumulate"
+        args["no_accum"] = "1" 
+    else: 
+        args["accum_binaryop"] = accum
+        args["no_accum"] = "0"
+    return _get_module("apply", module, **args)
+
 def get_semiring(atype, btype, semiring, accum=None, mask=None):
+    # TODO accept ctype if accumulation is set
     c_types = {
             "atype": _types[atype],
-            "btype": _types[btype]
+            "btype": _types[btype],
+            "ctype": upcast(atype, btype)[1]
     }
-    # upcast ctype to largest of atype and btype
-    py_types = list(_types.keys())
-    c_types["ctype"] = list(_types.items())[max(
-            py_types.index(atype), 
-            py_types.index(btype)
-    )][1]
     module  = "at_" + _types[atype]\
             + "bt_" + _types[btype]\
             + "sr_" + "".join(map(str,semiring))\
@@ -107,31 +132,32 @@ def _get_module(target, module, **kwargs):
     # first look in dictionary
     try:
         return _gb[module]
-    except:
+    except KeyError:
         # then check directory
         try:
             _gb[module] = importlib.import_module("GraphBLAS.lib." + module)
             return _gb[module]
         # finally build and return module
-        except:
+        except ImportError:
             return _build_module(target, module, **kwargs)
 
 #def _build_module(target, module, dtype, alg, semiring, accum):
 def _build_module(target, module, **kwargs):
-    print(kwargs)
     # create directory for modules
     if not os.path.exists(_MODDIR):
         os.makedirs(_MODDIR)
 
     FNULL = open(os.devnull, 'w')
-    cmd = ["make", 
-           target, 
-           "MODULE=" + module,
-           "PYBIND1=" + _PYBIND[0],
-           "PYBIND2=" + _PYBIND[1],
-           "PYBIND3=" + _PYBIND[2],
-           "PYEXT=" + _PYEXT,
-           "DIR=" + _MODDIR + "/"]
+    cmd = [
+            "make", 
+            target, 
+            "MODULE=" + module,
+            "PYBIND1=" + _PYBIND[0],
+            "PYBIND2=" + _PYBIND[1],
+            "PYBIND3=" + _PYBIND[2],
+            "PYEXT=" + _PYEXT,
+            "DIR=" + _MODDIR + "/"
+    ]
     cmd += [arg.upper() + "=" + val for arg, val in kwargs.items()]
     subprocess.call(cmd, cwd=_MODDIR)#, stdout=FNULL)
 
@@ -143,7 +169,7 @@ def _get_type(container):
     # if a is a numpy/scipy array
     try: return container.dtype.type
     # if a is an N-D list/array
-    except:
+    except AttributeError:
         # drill down to data in container
         while type(container) not in _types: 
             container = container[0]
