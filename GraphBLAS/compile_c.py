@@ -52,7 +52,7 @@ def upcast(atype, btype):
     return list(_types.items())[max(
             py_types.index(atype), 
             py_types.index(btype)
-    )]
+    )][0]
 
 def get_container(atype):
     module = "at_" + _types[atype]
@@ -63,7 +63,7 @@ def get_algorithm(atype, btype, algorithm):
     c_types = {"atype": _types[atype]}
     if btype is not None:
         c_types["btype"] = _types[btype]
-        c_types["ctype"] = upcast(atype, btype)[1]
+        c_types["ctype"] = _types[upcast(atype, btype)]
     else: c_types["btype"] = ""
 
     module  = "at_" + _types[atype]\
@@ -79,8 +79,8 @@ def get_apply(atype, op, const, accum):
     c_types = {"atype": _types[atype], "ctype": _types[atype]}
     module  = "at_" + _types[atype]\
             + "ap_" + op\
-            + ("const_" + str(const) if const is not None else "")\
-            + ("ac_" + accum if accum is not None else "")
+            + "const_" + str(const)\
+            + "ac_" + str(accum)
     # generate unique module name from compiler parameters
     module = hashlib.sha1(module.encode('utf-8')).hexdigest()
 
@@ -101,17 +101,18 @@ def get_apply(atype, op, const, accum):
         args["no_accum"] = "0"
     return _get_module("apply", module, **args)
 
-def get_semiring(atype, btype, semiring, accum=None, mask=None):
+def get_semiring(semiring, atype, btype, ctype, accum):
     # TODO accept ctype if accumulation is set
     c_types = {
             "atype": _types[atype],
             "btype": _types[btype],
-            "ctype": upcast(atype, btype)[1]
+            "ctype": _types[ctype],
     }
     module  = "at_" + _types[atype]\
             + "bt_" + _types[btype]\
+            + "ct_" + _types[ctype]\
             + "sr_" + "".join(map(str,semiring))\
-            + ("ac_" + accum if accum is not None else "")
+            + "ac_" + str(accum)
     # generate unique module name from compiler parameters
     module = hashlib.sha1(module.encode('utf-8')).hexdigest()
 
@@ -124,8 +125,11 @@ def get_semiring(atype, btype, semiring, accum=None, mask=None):
     else: 
         args["accum_binaryop"] = accum
         args["no_accum"] = "0"
-        # set default min identity
-    args["min_idnty"] = "1" if semiring.add_identity == "MinIdentity" else "0"
+    # set default min identity
+    if semiring.add_identity == "MinIdentity":
+        args["min_identity"] = "1" 
+    else:
+        args["min_identity"] = "0"
     return _get_module("accumulate", module, **args)
 
 def _get_module(target, module, **kwargs):
@@ -151,12 +155,12 @@ def _build_module(target, module, **kwargs):
     cmd = [
             "make", 
             target, 
-            "MODULE=" + module,
+            "MODULE="  + module,
             "PYBIND1=" + _PYBIND[0],
             "PYBIND2=" + _PYBIND[1],
             "PYBIND3=" + _PYBIND[2],
-            "PYEXT=" + _PYEXT,
-            "DIR=" + _MODDIR + "/"
+            "PYEXT="   + _PYEXT,
+            "DIR="     + _MODDIR + "/"
     ]
     cmd += [arg.upper() + "=" + val for arg, val in kwargs.items()]
     subprocess.call(cmd, cwd=_MODDIR)#, stdout=FNULL)
