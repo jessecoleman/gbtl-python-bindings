@@ -5,20 +5,6 @@ import GraphBLAS.operators as ops
 
 no_mask = c.get_container(bool).NoMask()
 
-# TODO test dimensions of output
-def get_output_type(A, B):
-    ctype = c.upcast(A.dtype, B.dtype)
-    return {
-        (Matrix, Matrix): 
-            (lambda: Matrix((B.shape[0], A.shape[1]), ctype)),
-        (Matrix, Vector): 
-            (lambda: Vector((A.shape[1],), ctype)),
-        (Vector, Matrix): 
-            (lambda: Vector((B.shape[0],), ctype)),
-        (Vector, Vector): 
-            (lambda: Vector((A.shape[1],), ctype))
-    }[type(A), type(B)]
-
 class Matrix(object):
 
     def __init__(self, m=None, shape=None, dtype=None):
@@ -85,14 +71,10 @@ class Matrix(object):
 
     # remove mask and add return accumulator
     def __iadd__(self, expr):
-        # TODO check for condition where this isn't callable
         if callable(expr):
-            expr(self, ops.accumulator)
-            return self
-        # if expression is a single term
+            return lambda e: expr(e, accum=ops.accumulator)
         elif isinstance(expr, Matrix):
-            ops.Identity(self, expr, ops.accumulator)
-            return self
+            return ops.Identity(expr, accum=ops.accumulator)
         else: raise TypeError("Evaluation was not deferred")
 
     # self.__setitem__(self.__getitem__(item).__iadd__(assign))
@@ -160,6 +142,12 @@ class Matrix(object):
     def nvals(self):
         return self.vec.nvals()
 
+    def _combine(self, other):
+        if isinstance(other, Matrix): 
+            return Matrix((other.shape[0], self.shape[1]), ctype)
+        elif isinstance(other, Vector): 
+            return Vector((self.shape[1],), ctype)
+
 class Vector(object):
 
     def __init__(self, v=None, shape=None, dtype=None):
@@ -221,11 +209,9 @@ class Vector(object):
 
     def __iadd__(self, expr):
         if callable(expr):
-            expr(self, ops.accumulator)
-            return self
+            return lambda e: expr(e, accum=ops.accumulator)
         elif isinstance(expr, Vector):
-            ops.Identity(self, expr, ops.accumulator)
-            return self
+            return ops.Identity(expr, accum=ops.accumulator)
         else: raise TypeError("Evaluation was not deferred")
 
     # self.__setitem__(self.__getitem__(item).__iadd__(assign))
@@ -252,7 +238,6 @@ class Vector(object):
                 idx.append(i)
                 vals.append(True)
 
-            print(idx, vals, self.shape)
             # mask self
             self._mask = Vector(
                     (vals, idx), 
@@ -262,10 +247,8 @@ class Vector(object):
 
         # masking with boolean Matrix
         elif isinstance(item, Vector):
-            if item.dtype == bool: 
-                self._mask = item.vec
-            else:
-                raise TypeError("Mask must be applied with boolean Vector")
+            if item.dtype == bool: self._mask = item.vec
+            else: raise TypeError("Mask must be applied with boolean Vector")
 
         else:
             raise TypeError("Mask must be boolean Vector or slice with optional replace flag")
@@ -273,8 +256,10 @@ class Vector(object):
         return self
 
     def __setitem__(self, item, assign):
+        print(item is self)
         if callable(assign):
             assign(self)
+        else: raise Exception("Parameter for __setitem__ must be partial function")
         self._mask = no_mask
         self._repl = False
 
@@ -290,4 +275,11 @@ class Vector(object):
 
     def __len__(self):
         return self.vec.size()
+
+    def _combine(self, other):
+        if isinstance(other, Matrix): 
+            return Vector((other.shape[0],), ctype)
+        elif isinstance(other, Vector): 
+            return Vector((self.shape[1],), ctype)
+
     

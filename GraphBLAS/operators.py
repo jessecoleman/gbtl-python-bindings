@@ -3,25 +3,25 @@ from collections import namedtuple
 from GraphBLAS import compile_c as c
 
 __all__ = [
-    'Apply', 
-    'Accumulator', 
-    'Semiring',
-    'BooleanAccumulate',
-    'ArithmeticAccumulate',
-    'Identity',
-    'AdditiveInverse',
-    'MultiplicativeInverse',
-    'ArithmeticSemiring', 
-    'MinPlusSemiring', 
-    'MaxTimesSemiring', 
-    'LogicalSemiring',
-    'MinSelect2ndSemiring', 
-    'MaxSelect2ndSemiring',
-    'MinSelect1stSemiring',
-    'MaxSelect1stSemiring',
-    'unary_ops',
-    'binary_ops', 
-    'identities'
+    "Apply", 
+    "Accumulator", 
+    "Semiring",
+    "BooleanAccumulate",
+    "ArithmeticAccumulate",
+    "Identity",
+    "AdditiveInverse",
+    "MultiplicativeInverse",
+    "ArithmeticSemiring", 
+    "MinPlusSemiring", 
+    "MaxTimesSemiring", 
+    "LogicalSemiring",
+    "MinSelect2ndSemiring", 
+    "MaxSelect2ndSemiring",
+    "MinSelect1stSemiring",
+    "MaxSelect1stSemiring",
+    "unary_ops",
+    "binary_ops", 
+    "identities"
 ]
 
 accumulator = None
@@ -61,16 +61,13 @@ identities = OperatorMap({
     "minimum": "MinIdentity"
 })
 
-print(identities.additive)
-print(binary_ops.logical_and)
-
 class Accumulator(ContextDecorator):
 
     # TODO create stack to trace previous accumulators
     stack = []
 
-    def __init__(self, acc_binop):
-        self._ac = acc_binop
+    def __init__(self, accum_binary_op):
+        self.accum_binary_op = accum_binary_op
 
     def __enter__(self):
         global accumulator
@@ -85,6 +82,9 @@ class Accumulator(ContextDecorator):
         accumulator = Accumulator.stack.pop()
         return False
 
+    def __str__(self):
+        return self.accum_binary_op
+
 NoAccumulate = Accumulator(None)
 ArithmeticAccumulate = Accumulator(binary_ops.plus)
 BooleanAccumulate = Accumulator(binary_ops.logical_and)
@@ -92,7 +92,7 @@ BooleanAccumulate = Accumulator(binary_ops.logical_and)
 # make sure accum doesn't go out of scope before evaluating expressions
 class Apply(object):
 
-    def __init__(self, app_op, bound_const=None):
+    def __init__(self, app_op, bound_const=""):
         self._ap = app_op
         self._const = bound_const  # if operator is binary, bind constant
         self._modules = dict()
@@ -109,19 +109,25 @@ class Apply(object):
             module = self._modules[m_args]
         except KeyError:
             # atype ctype op const accum
+            print(self._ap, self._const)
             module = c.get_apply(self._ap, self._const, *m_args)
             self._modules[m_args] = module
         return module
 
     # accum is bound at the module level so don't need to pass into lambda
     def __call__(self, A, C=None, accum=None):
-        partial = lambda C, accum=accum:\
-                self._get_module(A, C, accum)\
-                .apply(C.mat, A.mat, C._mask, C._repl)
-        print("C", C)
-        if C is None: return partial
-        else: partial(C)
-        return C
+
+        # if C is None and accum is not None:
+        #     raise Exception("accum can only be specified if operation is done inplace")
+
+        def part(C=None, accum=accum):
+            if C is None: C = A._combine(B)
+            m = self._get_module(A, C, accum)
+            m.apply(C.mat, A.mat, C._mask, C._repl)
+            return C
+
+        if C is None: return part
+        else: return part(C)
 
 Identity = Apply(unary_ops.identity)
 AdditiveInverse = Apply(unary_ops.additive_inverse)
@@ -131,10 +137,13 @@ class Semiring(ContextDecorator):
 
     stack = []
 
-    _ops = namedtuple('_ops', 'add_binaryop add_identity mult_binaryop')
+    _ops = namedtuple("_ops", "add_binaryop add_identity mult_binaryop")
     _modules = dict()
 
     def __init__(self, add_binop, add_idnty, mul_binop):
+        if add_binop is None or add_idnty is None or mul_binop is None:
+            print("constructing Semiring")
+            print(add_binop, add_idnty, mul_binop)
         self._ops = self._ops(add_binaryop=add_binop, 
                               add_identity=add_idnty, 
                               mult_binaryop=mul_binop)
@@ -155,50 +164,38 @@ class Semiring(ContextDecorator):
             self._modules[m_args] = module
         return module
 
+    def _partial(self, op, C, A, B, accum):
+
+        if C is None and accum is not None:
+            raise Exception("accum can only be specified if operation is done inplace")
+
+        def part(C=None, accum=accum):
+            if C is None: C = A._combine(B)
+            m = self._get_module(A, B, C, accum)
+            getattr(m, op)(C.mat, A.mat, B.mat, C._mask, C._repl)
+            return C
+
+        if C is None: return part
+        else: return part(C)
+
     # TODO decide how to allow user to override accum
     def eWiseAdd(self, A, B, C=None, accum=None):
-        partial = lambda C, accum=accum:\
-                self._get_module(A, B, C, accum)\
-                .eWiseAdd(C.mat, A.mat, B.mat, C._mask, C._repl)
-
-        if C is None: return partial
-        else: partial(C)
-        return C
+        return self._partial("eWiseAdd", C, A, B, accum)
 
     def dot(self, A, B, C=None, accum=None):
         pass
 
     def eWiseMult(self, A, B, C=None, accum=None):
-        partial = lambda C, accum=accum:\
-            self._get_module(A, B, C, accum)\
-            .eWiseMult(C.mat, A.mat, B.mat, C._mask, C._repl)
-        if C is None: return partial
-        else: partial(C)
-        return C
+        return self._partial("eWiseMult", C, A, B, accum)
 
     def mxm(self, A, B, C=None, accum=None):
-        partial = lambda C, accum=accum:\
-            self._get_module(A, B, C, accum)\
-            .mxm(C.mat, A.mat, B.mat, C._mask, C._repl)
-        if C is None: return partial
-        else: partial(C)
-        return C
+        return self._partial("mxm", C, A, B, accum)
 
     def mxv(self, A, B, C=None, accum=None):
-        partial = lambda C, accum=accum:\
-            self._get_module(A, B, C, accum)\
-            .mxv(C.mat, A.mat, B.mat, C._mask, C._repl)
-        if C is None: return partial
-        else: partial(C)
-        return C
+        return self._partial("mxv", C, A, B, accum)
 
     def vxm(self, A, B, C=None, accum=None):
-        partial = lambda C, accum=accum:\
-            self._get_module(A, B, C, accum)\
-            .vxm(C.mat, A.mat, B.mat, C._mask, C._repl)
-        if C is None: return partial
-        else: partial(C)
-        return C
+        return self._partial("vxm", C, A, B, accum)
 
     def __enter__(self):
         global semiring
@@ -207,17 +204,17 @@ class Semiring(ContextDecorator):
         semiring = self
         return self
 
-    def __exit__(self, exception_type, exception_value, traceback):
+    def __exit__(self, *errors):
         # reset semiring
         semring = Semiring.stack.pop()
         return False
 
 ArithmeticSemiring = Semiring(binary_ops.plus, identities.additive, binary_ops.times)
-LogicalSemiring = Semiring(binary_ops.logical_or, identities.false, binary_ops.logical_and)
-MinPlusSemiring = Semiring(binary_ops.min, identities.min_identity, binary_ops.plus)
+LogicalSemiring = Semiring(binary_ops.logical_or, identities.boolean, binary_ops.logical_and)
+MinPlusSemiring = Semiring(binary_ops.minimum, identities.minimum, binary_ops.plus)
 # TODO The following identity only works for unsigned domains
-MaxTimesSemiring = Semiring(binary_ops.max, identities.additive, binary_ops.tmes)
-MinSelect2ndSemiring = Semiring(binary_ops.min, identities.min_identity, binary_ops.second)
-MaxSelect2ndSemiring = Semiring(binary_ops.max, identities.additive, binary_ops.second)
-MinSelect1stSemiring = Semiring(binary_ops.min, identities.min_identity, binary_ops.first)
-MaxSelect1stSemiring = Semiring(binary_ops.max, identities.additive, binary_ops.first)
+MaxTimesSemiring = Semiring(binary_ops.maximum, identities.additive, binary_ops.times)
+MinSelect2ndSemiring = Semiring(binary_ops.minimum, identities.minimum, binary_ops.second)
+MaxSelect2ndSemiring = Semiring(binary_ops.maximum, identities.additive, binary_ops.second)
+MinSelect1stSemiring = Semiring(binary_ops.minimum, identities.minimum, binary_ops.first)
+MaxSelect1stSemiring = Semiring(binary_ops.maximum, identities.additive, binary_ops.first)
