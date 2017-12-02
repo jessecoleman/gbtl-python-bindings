@@ -57,9 +57,12 @@ def upcast(atype, btype):
 def get_container(atype):
     module = "at_" + _types[atype]
     module = hashlib.sha1(module.encode('utf-8')).hexdigest()
-    return _get_module("container", module, atype=_types[atype])
+    args = {"atype": _types[atype]}
+    if _types[atype] == 'bool': args['mask'] = "1"
+    else: args["mask"] = "0"
+    return _get_module("container", module, **args)
 
-def get_algorithm(atype, btype, algorithm):
+def get_algorithm(algorithm, atype, btype):
     c_types = {"atype": _types[atype]}
     if btype is not None:
         c_types["btype"] = _types[btype]
@@ -71,21 +74,22 @@ def get_algorithm(atype, btype, algorithm):
             + "al_" + algorithm
     module = hashlib.sha1(module.encode('utf-8')).hexdigest()
 
-    args = ctype
+    args = c_types
     args.update({"alg": algorithm})
     return _get_module("algorithm", module, args)
 
-def get_apply(atype, op, const, accum):
-    c_types = {"atype": _types[atype], "ctype": _types[atype]}
+def get_apply(op, const, atype, ctype, accum):
+    c_types = {"atype": _types[atype], "ctype": _types[ctype]}
     module  = "at_" + _types[atype]\
+            + "ct_" + _types[atype]\
             + "ap_" + op\
             + "const_" + str(const)\
             + "ac_" + str(accum)
     # generate unique module name from compiler parameters
     module = hashlib.sha1(module.encode('utf-8')).hexdigest()
 
-    args = {"apply_op": op}
-    args.update(c_types)
+    args = c_types
+    args["apply_op"] = op
     # if converting binary op to unary op
     if const is None:
         args["bound_second"] = "0"
@@ -169,7 +173,7 @@ def _build_module(target, module, **kwargs):
     _gb[module] = importlib.import_module("lib.%s" % module)
     return _gb[module]
        
-def _get_type(container):
+def get_type(container):
     # if a is a numpy/scipy array
     try: return container.dtype.type
     # if a is an N-D list/array

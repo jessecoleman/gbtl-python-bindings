@@ -1,42 +1,33 @@
 import numpy as np
 from scipy import sparse
 from GraphBLAS import compile_c as c
+import GraphBLAS.operators as ops
 
-class _MatrixOps(object):
-    def __add__(self, other):
-        return self._sr("eWiseAdd", self, other)
+no_mask = c.get_container(bool).NoMask()
 
-    def __mul__(self, other):
-        return self._sr("eWiseMult", self, other) 
+# TODO test dimensions of output
+def get_output_type(A, B):
+    ctype = c.upcast(A.dtype, B.dtype)
+    return {
+        (Matrix, Matrix): 
+            (lambda: Matrix((B.shape[0], A.shape[1]), ctype)),
+        (Matrix, Vector): 
+            (lambda: Vector((A.shape[1],), ctype)),
+        (Vector, Matrix): 
+            (lambda: Vector((B.shape[0],), ctype)),
+        (Vector, Vector): 
+            (lambda: Vector((A.shape[1],), ctype))
+    }[type(A), type(B)]
 
-    def __matmul__(self, other):
-        return self._sr("mxm", self, other)
-
-    def __rmatmul__(self, other):
-        return self._sr("mxm", other, self)
-
-class _VectorOps(object):
-    def __add__(self, other):
-        return self._sr("eWiseAdd", self, other)
-
-    def __mul__(self, other):
-        return self._sr("eWiseMult", self, other)
-
-    def __matmul__(self, other):
-        return self._sr("vxm", self, other)
-
-    def __rmatmul__(self, other):
-        return self._sr("mxv", other, self)
-
-class Matrix(_MatrixOps):
+class Matrix(object):
 
     def __init__(self, m=None, shape=None, dtype=None):
         # require matrix or shape and type
         if m is None and (shape is None or dtype is None):
             raise ValueError("Please provide matrix or shape and dtype")
 
-        self._mask = None
-        self._ac = None
+        self._mask = no_mask
+        self._repl = False
 
         # copy constructor, no compilation needed
         # TODO mat is currently copied by reference, not value
@@ -46,7 +37,7 @@ class Matrix(_MatrixOps):
 
         # get C++ module with declaration for Matrix class
         if dtype is not None: self.dtype = dtype 
-        else: self.dtype = c._get_type(m)
+        else: self.dtype = c.get_type(m)
         module = c.get_container(self.dtype)
 
         # construct from scipy sparse matrix
@@ -80,56 +71,104 @@ class Matrix(_MatrixOps):
     def __str__(self):
         return str(self.mat)
 
-    def __getitem__(self, item):
-        # TODO typecheck for boolean matrix
-        if isinstance(item, Matrix):
-            if item.dtype == bool: 
-                self._mask = item.mat
-            else:
-                raise TypeError("Mask must be applied with boolean Matrix")
-        # if replace flag is set
-        elif isinstance(item, tuple) and len(item) == 2:
-            if item[1].dtype == bool: 
-                self._mask, self._replace = item
-            else:
-                raise TypeError("Mask must be applied with boolean Matrix")
-        # denote self as masked object
-        return self
+    def __add__(self, other):
+        return ops.semring.eWiseAdd(self, other)
 
-    # self[item] += assign
+    def __mul__(self, other):
+        return ops.semiring.eWiseMult(self, other) 
+
+    def __matmul__(self, other):
+        return ops.semiring.mxm(self, other)
+
+    def __rmatmul__(self, other):
+        return ops.semiring.mxm(other, self)
+
+    # remove mask and add return accumulator
+    def __iadd__(self, expr):
+        # TODO check for condition where this isn't callable
+        if callable(expr):
+            expr(self, ops.accumulator)
+            return self
+        # if expression is a single term
+        elif isinstance(expr, Matrix):
+            ops.Identity(self, expr, ops.accumulator)
+            return self
+        else: raise TypeError("Evaluation was not deferred")
+
     # self.__setitem__(self.__getitem__(item).__iadd__(assign))
-    def __setitem__(self, item, assign):
+    # applies mask stored in item and returns self
+    def __getitem__(self, item):
+        print("MASK", item)
+
+        # if replace flag is set
+        if isinstance(item, bool):
+            self._repl = item
+            return self
+
+        # strip replace off end if it exists
+        elif isinstance(item, tuple):
+            if isinstance(item[-1], bool):
+                *item, self._repl = item
+
+        # no mask
         if item == slice(None, None, None):
-            print("NoMask")
+            pass
+
+        # masking with slice
         elif isinstance(item, tuple) and len(item) == 2\
-                and isinstance(item[0], slice)\
-                and isinstance(item[1], slice):
+                and all(isinstance(s, slice) for s in item):
             row_idx, col_idx, vals = [], [], []
             for i in range(*item[0].indices(self.shape[0])):
                 for j in range(*item[1].indices(self.shape[1])):
                     row_idx.append(i)
                     col_idx.append(j)
                     vals.append(True)
-            print(Matrix((vals, (row_idx, col_idx)), shape=self.shape, dtype=bool))
 
+            # mask self
+            self._mask = Matrix(
+                    (vals, 
+                    (row_idx, col_idx)), 
+                    shape=self.shape, 
+                    dtype=bool
+            ).mat
+
+        # masking with boolean Matrix
+        elif isinstance(item, Matrix):
+            if item.dtype == bool: 
+                self._mask = item.mat
+            else:
+                raise TypeError("Mask must be applied with boolean Matrix")
+
+        else:
+            raise TypeError("Mask must be boolean Matrix or 2D slice with optional replace flag")
+
+        return self
+
+    # self[item] += assign
+    # self.__setitem__(self.__getitem__(item).__iadd__(assign))
+    def __setitem__(self, item, assign):
+        if callable(assign):
+            assign(self)
+        self._mask = no_mask
+        self._repl = False
 
     # TODO double check that ~ copies instead of referencing
     def __invert__(self):
-        return Vector((~self.mat, self.shape, self.dtype))
+        return Matrix((~self.mat, self.shape, self.dtype))
 
     @property
     def nvals(self):
         return self.vec.nvals()
 
-class Vector(_VectorOps):
+class Vector(object):
 
     def __init__(self, v=None, shape=None, dtype=None):
         # require vector or shape and type
         if v is None and (shape is None or dtype is None):
             raise ValueError("Please provide vector or shape and dtype")
 
-        self._mask = None
-        self._ac = None
+        self._mask = no_mask
+        self._repl = False
 
         # copy constructor, no compilation needed
         if isinstance(v, tuple) and len(v) == 3:
@@ -140,7 +179,7 @@ class Vector(_VectorOps):
 
         # get C++ module with declaration for Matrix class
         if dtype is not None: self.dtype = dtype 
-        else: self.dtype = c._get_type(v)
+        else: self.dtype = c.get_type(v)
         module = c.get_container(self.dtype)
 
         if isinstance(v, list):
@@ -156,7 +195,9 @@ class Vector(_VectorOps):
             data, idx = v
             if shape is not None: self.shape = shape
             else: self.shape = (max(idx) + 1,)
-            self.vec = module.Vector(self.shape[0], idx, data)
+            self.vec = module.init_sparse_vector(
+                    self.shape[0], idx, data
+            )
 
         else:
             self.shape = shape
@@ -166,28 +207,79 @@ class Vector(_VectorOps):
 
         self.mat = self.vec
 
-    def __setitem__(self, item, assign):
+    def __add__(self, other):
+        return ops.semiring.eWiseAdd(self, other)
+
+    def __mul__(self, other):
+        return ops.semiring.eWiseMult(self, other)
+
+    def __matmul__(self, other):
+        return ops.semiring.vxm(self, other)
+
+    def __rmatmul__(self, other):
+        return ops.semiring.mxv(other, self)
+
+    def __iadd__(self, expr):
+        if callable(expr):
+            expr(self, ops.accumulator)
+            return self
+        elif isinstance(expr, Vector):
+            ops.Identity(self, expr, ops.accumulator)
+            return self
+        else: raise TypeError("Evaluation was not deferred")
+
+    # self.__setitem__(self.__getitem__(item).__iadd__(assign))
+    def __getitem__(self, item):
+        print("MASK", item)
+        # if replace flag is set
+        if isinstance(item, bool):
+            self._repl = item
+            return self
+
+        # strip replace off end if it exists
+        elif isinstance(item, tuple):
+            if isinstance(item[-1], bool):
+                *item, self._repl = item
+
+        # no mask
         if item == slice(None, None, None):
-            print("NoMask")
-            ...
-        elif isinstance(item, slice): 
+            pass
+
+        # masking with slice
+        elif isinstance(item, slice):
             idx, vals = [], []
-            # TODO optimize building matrix
             for i in range(*item.indices(self.shape[0])):
-                    idx.append(i)
-                    vals.append(True)
+                idx.append(i)
+                vals.append(True)
+
+            print(idx, vals, self.shape)
+            # mask self
             self._mask = Vector(
                     (vals, idx), 
                     shape=self.shape, 
                     dtype=bool
-                )
-            return self
+            ).mat
+
+        # masking with boolean Matrix
+        elif isinstance(item, Vector):
+            if item.dtype == bool: 
+                self._mask = item.vec
+            else:
+                raise TypeError("Mask must be applied with boolean Vector")
+
+        else:
+            raise TypeError("Mask must be boolean Vector or slice with optional replace flag")
+
+        return self
+
+    def __setitem__(self, item, assign):
+        if callable(assign):
+            assign(self)
+        self._mask = no_mask
+        self._repl = False
 
     def __invert__(self):
         return Vector((~self.vec, self.shape, self.dtype))
-
-    def __getitem__(self, item):
-        return self
 
     def __str__(self):
         return str(self.vec)
