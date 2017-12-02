@@ -28,6 +28,7 @@ __all__ = [
 accumulator = None
 semiring = None
 
+
 # dictionary of values to build operators
 class OperatorMap(dict):
     def __init__(self, keys):
@@ -37,7 +38,8 @@ class OperatorMap(dict):
 
     def __getattr__(self, attr):
         return self.get(attr)
-    
+
+
 unary_ops = OperatorMap({
     "identity": "Identity",
     "logical_not": "LogicalNot",
@@ -62,9 +64,9 @@ identities = OperatorMap({
     "minimum": "MinIdentity"
 })
 
+
 class Accumulator(ContextDecorator):
 
-    # TODO create stack to trace previous accumulators
     stack = []
 
     def __init__(self, accum_binary_op):
@@ -85,6 +87,7 @@ class Accumulator(ContextDecorator):
 
     def __str__(self):
         return self.accum_binary_op
+
 
 # make sure accum doesn't go out of scope before evaluating expressions
 class Apply(object):
@@ -118,11 +121,17 @@ class Apply(object):
         def part(C=None, accum=accum):
             if C is None: C = A._combine(B)
             m = self._get_module(A, C, accum)
-            m.apply(C.mat, A.mat, C._mask, C._repl)
+            m.apply(
+                C.mat,
+                A.mat,
+                C._mask,
+                C._repl
+            )
             return C
 
         if C is None: return part
         else: return part(C)
+
 
 class Semiring(ContextDecorator):
 
@@ -157,6 +166,10 @@ class Semiring(ContextDecorator):
 
     def eval(self, op, A, B, C, accum):
 
+        # if A or B need to be evaluated before continuing
+        if callable(A): A()
+        if callable(B): B()
+
         def part(C=None, accum=accum):
             # get empty matrix with the correct output size
             if C is None: C = A._combine(B)
@@ -173,10 +186,10 @@ class Semiring(ContextDecorator):
         if C is None: return part
         else: return part(C)
 
-    # TODO decide how to allow user to override accum
+    # mask and replace are configured at evaluation by C param
+    # accum is optionally configured at evaluation
     def eWiseAdd(self, A, B, C=None, accum=None):
-        
-        print(partial(self.eval, op="eWiseAdd", A=A, B=B, C=C, accum=accum))
+        return self._partial("eWiseAdd", A, B, C, accum)
 
     def dot(self, A, B, C=None, accum=None):
         pass
@@ -201,18 +214,23 @@ class Semiring(ContextDecorator):
         return self
 
     def __exit__(self, *errors):
+        global semiring
         # reset semiring
         semring = Semiring.stack.pop()
         return False
 
+
+# default binary operators
 Identity = Apply(unary_ops.identity)
 AdditiveInverse = Apply(unary_ops.additive_inverse)
 MultiplicativeInverse = Apply(unary_ops.multiplicative_inverse)
 
+# default accumulators
 NoAccumulate = Accumulator(None)
 ArithmeticAccumulate = Accumulator(binary_ops.plus)
 BooleanAccumulate = Accumulator(binary_ops.logical_and)
 
+# default semirings
 ArithmeticSemiring = Semiring(binary_ops.plus, identities.additive, binary_ops.times)
 LogicalSemiring = Semiring(binary_ops.logical_or, identities.boolean, binary_ops.logical_and)
 MinPlusSemiring = Semiring(binary_ops.minimum, identities.minimum, binary_ops.plus)

@@ -71,7 +71,6 @@ class Matrix(object):
 
     # create callable object to accumulate
     def __iadd__(self, expr):
-        print(signature(expr))
         # if already callable, add accumulator and output params
         if callable(expr):
             return lambda: expr(self, accum=ops.accumulator)
@@ -145,11 +144,14 @@ class Matrix(object):
     def nvals(self):
         return self.vec.nvals()
 
+    # returns a new container with the correct output dimensions
     def _combine(self, other):
+        ctype = c.upcast(self.dtype, other.dtype)
         if isinstance(other, Matrix): 
             return Matrix((other.shape[0], self.shape[1]), ctype)
         elif isinstance(other, Vector): 
             return Vector((self.shape[1],), ctype)
+
 
 class Vector(object):
 
@@ -261,10 +263,9 @@ class Vector(object):
         return self
 
     def __setitem__(self, item, assign):
+        print(item, assign)
         if callable(assign):
             assign()
-        print(item, assign)
-        assign()
         self._mask = no_mask
         self._repl = False
 
@@ -281,10 +282,10 @@ class Vector(object):
     def __len__(self):
         return self.vec.size()
 
+    # returns a new container with the correct output dimensions
     def _combine(self, other):
-        if isinstance(other, Matrix): 
+        ctype = c.upcast(self.dtype, other.dtype)
+        if isinstance(other, Matrix):
             return Vector((other.shape[0],), ctype)
         elif isinstance(other, Vector): 
             return Vector((self.shape[1],), ctype)
-
-    

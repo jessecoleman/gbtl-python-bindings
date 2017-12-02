@@ -34,6 +34,8 @@ def bfs(graph, wavefront):
     print(parent_list)
     print(wavefront)
 
+    exit()
+
     for i in range(5):
         wavefront[:] += wavefront1 + parent_list
         wavefront[:] = wavefront1
