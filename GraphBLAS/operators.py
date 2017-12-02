@@ -1,3 +1,4 @@
+from functools import partial
 from contextlib import ContextDecorator
 from collections import namedtuple
 from GraphBLAS import compile_c as c
@@ -27,8 +28,8 @@ __all__ = [
 accumulator = None
 semiring = None
 
+# dictionary of values to build operators
 class OperatorMap(dict):
-
     def __init__(self, keys):
         super(OperatorMap, self).__init__(**keys)
         for key, val in keys.items():
@@ -85,10 +86,6 @@ class Accumulator(ContextDecorator):
     def __str__(self):
         return self.accum_binary_op
 
-NoAccumulate = Accumulator(None)
-ArithmeticAccumulate = Accumulator(binary_ops.plus)
-BooleanAccumulate = Accumulator(binary_ops.logical_and)
-
 # make sure accum doesn't go out of scope before evaluating expressions
 class Apply(object):
 
@@ -117,9 +114,7 @@ class Apply(object):
     # accum is bound at the module level so don't need to pass into lambda
     def __call__(self, A, C=None, accum=None):
 
-        # if C is None and accum is not None:
-        #     raise Exception("accum can only be specified if operation is done inplace")
-
+        # return partial function
         def part(C=None, accum=accum):
             if C is None: C = A._combine(B)
             m = self._get_module(A, C, accum)
@@ -128,10 +123,6 @@ class Apply(object):
 
         if C is None: return part
         else: return part(C)
-
-Identity = Apply(unary_ops.identity)
-AdditiveInverse = Apply(unary_ops.additive_inverse)
-MultiplicativeInverse = Apply(unary_ops.multiplicative_inverse)
 
 class Semiring(ContextDecorator):
 
@@ -155,24 +146,28 @@ class Semiring(ContextDecorator):
         if C is None: ctype = C.upcast(A.dtype, B.dtype)
         else: ctype = C.dtype
 
+        # m_args provide a key to the modules dictionary
         m_args = (A.dtype, B.dtype, ctype, accum)
         try:
             module = self._modules[m_args]
         except KeyError:
             module = c.get_semiring(self._ops, *m_args)
-            # cache module
             self._modules[m_args] = module
         return module
 
-    def _partial(self, op, C, A, B, accum):
-
-        if C is None and accum is not None:
-            raise Exception("accum can only be specified if operation is done inplace")
+    def eval(self, op, A, B, C, accum):
 
         def part(C=None, accum=accum):
+            # get empty matrix with the correct output size
             if C is None: C = A._combine(B)
             m = self._get_module(A, B, C, accum)
-            getattr(m, op)(C.mat, A.mat, B.mat, C._mask, C._repl)
+            getattr(m, op)(
+                    C.mat, 
+                    A.mat, 
+                    B.mat, 
+                    C._mask, 
+                    C._repl
+            )
             return C
 
         if C is None: return part
@@ -180,22 +175,23 @@ class Semiring(ContextDecorator):
 
     # TODO decide how to allow user to override accum
     def eWiseAdd(self, A, B, C=None, accum=None):
-        return self._partial("eWiseAdd", C, A, B, accum)
+        
+        print(partial(self.eval, op="eWiseAdd", A=A, B=B, C=C, accum=accum))
 
     def dot(self, A, B, C=None, accum=None):
         pass
 
     def eWiseMult(self, A, B, C=None, accum=None):
-        return self._partial("eWiseMult", C, A, B, accum)
+        return self._partial("eWiseMult", A, B, C, accum)
 
     def mxm(self, A, B, C=None, accum=None):
-        return self._partial("mxm", C, A, B, accum)
+        return self._partial("mxm", A, B, C, accum)
 
     def mxv(self, A, B, C=None, accum=None):
-        return self._partial("mxv", C, A, B, accum)
+        return self._partial("mxv", A, B, C, accum)
 
     def vxm(self, A, B, C=None, accum=None):
-        return self._partial("vxm", C, A, B, accum)
+        return self._partial("vxm", A, B, C, accum)
 
     def __enter__(self):
         global semiring
@@ -208,6 +204,14 @@ class Semiring(ContextDecorator):
         # reset semiring
         semring = Semiring.stack.pop()
         return False
+
+Identity = Apply(unary_ops.identity)
+AdditiveInverse = Apply(unary_ops.additive_inverse)
+MultiplicativeInverse = Apply(unary_ops.multiplicative_inverse)
+
+NoAccumulate = Accumulator(None)
+ArithmeticAccumulate = Accumulator(binary_ops.plus)
+BooleanAccumulate = Accumulator(binary_ops.logical_and)
 
 ArithmeticSemiring = Semiring(binary_ops.plus, identities.additive, binary_ops.times)
 LogicalSemiring = Semiring(binary_ops.logical_or, identities.boolean, binary_ops.logical_and)

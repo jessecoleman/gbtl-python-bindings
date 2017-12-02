@@ -69,12 +69,16 @@ class Matrix(object):
     def __rmatmul__(self, other):
         return ops.semiring.mxm(other, self)
 
-    # remove mask and add return accumulator
+    # create callable object to accumulate
     def __iadd__(self, expr):
+        print(signature(expr))
+        # if already callable, add accumulator and output params
         if callable(expr):
-            return lambda e: expr(e, accum=ops.accumulator)
+            return lambda: expr(self, accum=ops.accumulator)
+        # else turn into identity apply operator first
         elif isinstance(expr, Matrix):
-            return ops.Identity(expr, accum=ops.accumulator)
+            # lazily evaluates Apply object
+            return lambda: ops.Identity(expr, self, accum=ops.accumulator)
         else: raise TypeError("Evaluation was not deferred")
 
     # self.__setitem__(self.__getitem__(item).__iadd__(assign))
@@ -129,8 +133,7 @@ class Matrix(object):
     # self[item] += assign
     # self.__setitem__(self.__getitem__(item).__iadd__(assign))
     def __setitem__(self, item, assign):
-        if callable(assign):
-            assign(self)
+        assign()
         self._mask = no_mask
         self._repl = False
 
@@ -208,10 +211,12 @@ class Vector(object):
         return ops.semiring.mxv(other, self)
 
     def __iadd__(self, expr):
+        print(self, expr)
+        print(expr.args, expr.kwargs)
         if callable(expr):
-            return lambda e: expr(e, accum=ops.accumulator)
+            return lambda: expr(self, accum=ops.accumulator)
         elif isinstance(expr, Vector):
-            return ops.Identity(expr, accum=ops.accumulator)
+            return lambda: ops.Identity(expr, self, accum=ops.accumulator)
         else: raise TypeError("Evaluation was not deferred")
 
     # self.__setitem__(self.__getitem__(item).__iadd__(assign))
@@ -256,10 +261,10 @@ class Vector(object):
         return self
 
     def __setitem__(self, item, assign):
-        print(item is self)
         if callable(assign):
-            assign(self)
-        else: raise Exception("Parameter for __setitem__ must be partial function")
+            assign()
+        print(item, assign)
+        assign()
         self._mask = no_mask
         self._repl = False
 
