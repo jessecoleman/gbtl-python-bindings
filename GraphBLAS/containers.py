@@ -75,25 +75,8 @@ class Matrix(object):
     def __rmatmul__(self, other):
         return ops.semiring.mxm(other, self)
 
-    # create callable object from self and current accumulator
     def __iadd__(self, expr):
         raise Exception("use Matrix[:] notation to assign into matrix")
-
-        # if already callable
-        if callable(expr):
-            return expr(ops.accumulator, *self)
-
-        # else convert to apply with Identity
-        elif isinstance(expr, Matrix):
-            # lazily evaluates Apply object
-            return ops.Identity(
-                    expr, 
-                    self, 
-                    accum=ops.accumulator
-            )
-
-        else: 
-            raise TypeError("Evaluation was not deferred")
 
     # applies mask stored in item and returns self
     def __getitem__(self, item):
@@ -162,8 +145,8 @@ class Matrix(object):
                 and all(isinstance(i, int) for i in item):
             self.mat.setElement(item, assign)
 
-        elif callable(assign):
-            self = assign(self[item])
+        elif hasattr(assign, "eval"):
+            self = assign.eval(self[item])
 
         # TODO copy constructor
         elif isinstance(assign, Matrix):
@@ -279,21 +262,6 @@ class Vector(object):
     def __iadd__(self, expr):
         raise Exception("use Vector[:] notation to assign into vector")
 
-        # if already callable
-        if callable(expr):
-            return expr(self, accum=ops.accumulator)
-
-        # else convert to apply with Identity
-        elif isinstance(expr, Vector):
-            return ops.Identity(
-                    expr, 
-                    self, 
-                    accum=ops.accumulator
-            )
-
-        else: 
-            raise TypeError("Evaluation was not deferred")
-
     def __getitem__(self, *item):
 
         # TODO double check vector logic
@@ -348,8 +316,8 @@ class Vector(object):
         if isinstance(item, int):
             self.vec.setElement(item, assign)
 
-        elif callable(assign):
-            self = assign(self[item])
+        elif hasattr(assign, "eval"):
+            self = assign.eval(self[item])
         
         # TODO copy
         elif isinstance(assign, Vector):

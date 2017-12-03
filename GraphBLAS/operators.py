@@ -156,8 +156,8 @@ class Apply(object):
             raise Exception("if accum is defined, expression needs to be evaluated on the spot")
 
         # evaluate A before performing apply
-        if callable(A): 
-            A = A()
+        if hasattr(A, "eval"): 
+            A = A.eval()
 
         # return partial expression
         if C is None:
@@ -249,8 +249,8 @@ class Semiring(ContextDecorator):
             raise Exception("if accum is defined, expression needs to be evaluated on the spot")
 
         # if A or B need to be evaluated before continuing
-        if callable(A): A = A()
-        if callable(B): B = B()
+        if hasattr(A, "eval"): A = A.eval()
+        if hasattr(B, "eval"): B = B.eval()
 
         if C is not None:
             return Semiring.expr(self, A, B).eval(C, accum)
