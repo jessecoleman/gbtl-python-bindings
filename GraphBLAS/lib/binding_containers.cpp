@@ -22,10 +22,11 @@ typedef DTYPE ScalarT;
 typedef GraphBLAS::Matrix<ScalarT> MatrixT;
 typedef GraphBLAS::Vector<ScalarT> VectorT;
 
-//typedef GraphBLAS::Matrix<bool> MMatrixT;
 typedef GraphBLAS::MatrixComplementView<MatrixT> MatrixCompT;
-//typedef GraphBLAS::Vector<bool> MVectorT;
 typedef GraphBLAS::VectorComplementView<VectorT> VectorCompT;
+
+typedef GraphBLAS::TransposeView<MatrixT> MatrixTransposeT;
+
 
 MatrixT init_sparse_matrix(
         IndexT &rows, 
@@ -39,12 +40,13 @@ VectorT init_sparse_vector(
         IndexArrayT &i, 
         std::vector<ScalarT> const &vals);
 
-std::string print_matrix(MatrixT const &m);
-std::string print_vector(VectorT const &v);
+template <typename ContainerT>
+std::string print(ContainerT const &c);
 
-std::string print_matrix_comp(MatrixCompT const &m);
+MatrixTransposeT transpose(MatrixT const &m);
+
 MatrixCompT matrix_complement(MatrixT const &m);
-std::string print_vector_comp(VectorCompT const &v);
+
 VectorCompT vector_complement(VectorT const &v);
 
 std::vector<ScalarT> extract_vector(VectorT const v);
@@ -52,11 +54,21 @@ std::vector<ScalarT> extract_vector(VectorT const v);
 void define_matrix(py::module &m) 
 {
     py::class_<MatrixT>(m, "Matrix")
-        .def("__str__", &print_matrix, py::is_operator())
-        .def("__invert__", &matrix_complement, py::is_operator())
         .def("nvals", &MatrixT::nvals)
         .def("nrows", &MatrixT::nrows)
-        .def("ncols", &MatrixT::nrows);
+        .def("ncols", &MatrixT::nrows)
+        .def("hasElement", &MatrixT::hasElement)
+        .def("extractElement", &MatrixT::extractElement)
+        .def("setElement", &MatrixT::setElement)
+        .def("T", &transpose)
+        .def("__invert__", &matrix_complement, py::is_operator())
+        .def("__str__", &print<MatrixT>, py::is_operator());
+
+    py::class_<MatrixTransposeT>(m, "MatrixTransposeView")
+        .def("__str__", print<MatrixTransposeT>);
+
+    py::class_<MatrixCompT>(m, "MatrixComplementView")
+        .def("__str__", &print<MatrixCompT>);
 
     m.def("init_sparse_matrix", &init_sparse_matrix);
 }
@@ -67,16 +79,22 @@ void define_vector(py::module &m)
     py::class_<VectorT>(m, "Vector")
         .def(py::init<OtherVectorT const &>())
         .def(py::init<std::vector<ScalarT> const &>())
-        .def("__str__", &print_vector, py::is_operator())
-        .def("__invert__", &vector_complement, py::is_operator())
         .def("nvals", &VectorT::nvals)
         .def("size", &VectorT::size)
+        .def("hasElement", &VectorT::hasElement)
+        .def("extractElement", &VectorT::extractElement)
+        .def("setElement", &VectorT::setElement)
+        .def("__invert__", &vector_complement, py::is_operator())
+        .def("__str__", &print<VectorT>, py::is_operator())
         .def("__eq__", [](const VectorT &a, const VectorT &b) {
                 return a == b;
         }, py::is_operator())
         .def("__ne__", [](const VectorT &a, const VectorT &b) {
                 return a != b;
         }, py::is_operator());
+
+    py::class_<VectorCompT>(m, "VectorComplementView")
+        .def("__str__", &print<MatrixCompT>);
 
     m.def("init_sparse_vector", &init_sparse_vector);
 }
@@ -105,41 +123,23 @@ VectorT init_sparse_vector(
     return v;
 }
 
-// return string representation of Matrix m
-std::string print_matrix(MatrixT const &m) 
-{
-    std::ostringstream stream;
-    GraphBLAS::print_matrix(stream, m); 
-    return stream.str();
-}
-
-std::string print_vector(VectorT const &v) 
-{
-    std::ostringstream stream;
-    GraphBLAS::print_vector<VectorT>(stream, v); 
-    return stream.str();
-}
-
 MatrixCompT matrix_complement(MatrixT const &m) 
 { return GraphBLAS::complement(m); }
 
+VectorCompT vector_complement(VectorT const &v) 
+{ return GraphBLAS::complement(v); }
 
-std::string print_matrix_comp(MatrixCompT const &m) 
+
+template <typename ContainerT>
+std::string print(ContainerT const &c)
 {
     std::ostringstream stream;
-    m.printInfo(stream); 
+    c.printInfo(stream); 
     return stream.str();
 }
 
-VectorCompT vector_complement(VectorT const &c) 
-{ return GraphBLAS::complement(c); }
-
-std::string print_vector_comp(VectorCompT const &v) 
-{
-    std::ostringstream stream;
-    v.printInfo(stream); 
-    return stream.str();
-}
+MatrixTransposeT transpose(MatrixT const &m)
+{ return GraphBLAS::transpose(m); }
 
 std::vector<ScalarT> extract_vector(VectorT v) {
     std::vector<ScalarT> result(v.size(),0);
@@ -154,11 +154,6 @@ std::vector<ScalarT> extract_vector(VectorT v) {
 PYBIND11_MODULE(MODULE, m) {
     define_matrix(m);
     define_vector<VectorT>(m);
-
-    py::class_<MatrixCompT>(m, "MatrixComplementView")
-        .def("__str__", &print_matrix_comp);
-    py::class_<VectorCompT>(m, "VectorComplementView")
-        .def("__str__", &print_vector_comp);
 
 #if MASK == 1
     py::class_<GraphBLAS::NoMask>(m, "NoMask")

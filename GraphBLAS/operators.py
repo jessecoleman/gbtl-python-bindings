@@ -67,6 +67,7 @@ identities = OperatorMap({
 
 class Accumulator(ContextDecorator):
 
+    # keep track of accum precedence
     stack = []
 
     def __init__(self, accum_binary_op):
@@ -92,69 +93,76 @@ class Accumulator(ContextDecorator):
 # make sure accum doesn't go out of scope before evaluating expressions
 class Apply(object):
 
-    def __init__(self, app_op, bound_const=""):
-        self._ap = app_op
-        self._const = bound_const  # if operator is binary, bind constant
+    def __init__(self, apply_op, bound_const=""):
+        self.apply_unary_op = apply_op
+        self.bound_const = bound_const  # if operator is binary, bind constant
         self._modules = dict()
 
-    def _get_module(self, A, C=None, accum=None):
+    def _get_module(self, A, C, accum):
         
-        # if C is none, cast
-        if C is None: ctype = A.dtype
-        else: ctype = C.dtype
-
         # get module
-        m_args = (A.dtype, ctype, accum)
+        m_args = (A.dtype, C.dtype, accum)
         try:
             module = self._modules[m_args]
         except KeyError:
-            # atype ctype op const accum
-            print(self._ap, self._const)
-            module = c.get_apply(self._ap, self._const, *m_args)
+            module = c.get_apply(
+                    self.apply_unary_op, 
+                    self.bound_const, 
+                    *m_args
+            )
             self._modules[m_args] = module
         return module
 
-    # accum is bound at the module level so don't need to pass into lambda
     def __call__(self, A, C=None, accum=None):
 
+        # evaluate A before performing apply
+        if callable(A): 
+            A = A()
+
         # return partial function
-        def part(C=None, accum=accum):
-            if C is None: C = A._combine(B)
+        def part(accum, C=None, mask=type(A).no_mask, replace_flag=False):
+            if C is None: C = A._get_out_shape()
+            # accum is bound at the module level
             m = self._get_module(A, C, accum)
+            # cpp function call
             m.apply(
                 C.mat,
                 A.mat,
-                C._mask,
-                C._repl
+                mask,
+                replace_flag
             )
             return C
 
-        if C is None: return part
-        else: return part(C)
+        if accum is None:
+            accum = accumulator
+
+        if isinstance(C, tuple):
+            return part(accum, *C)
+
+        elif C is not None:
+            return part(accum, C)
+
+        else: return part
 
 
 class Semiring(ContextDecorator):
 
+    # keep track of semiring precedence
     stack = []
 
     _ops = namedtuple("_ops", "add_binaryop add_identity mult_binaryop")
     _modules = dict()
 
     def __init__(self, add_binop, add_idnty, mul_binop):
-        if add_binop is None or add_idnty is None or mul_binop is None:
-            print("constructing Semiring")
-            print(add_binop, add_idnty, mul_binop)
-        self._ops = self._ops(add_binaryop=add_binop, 
-                              add_identity=add_idnty, 
-                              mult_binaryop=mul_binop)
+        self._ops = Semiring._ops(
+                add_binaryop=add_binop, 
+                add_identity=add_idnty, 
+                mult_binaryop=mul_binop
+        )
         self._modules = dict()
 
-    def _get_module(self, A, B, C=None, accum=None):
+    def _get_module(self, A, B, C, accum):
         
-        # if C is none, upcast
-        if C is None: ctype = C.upcast(A.dtype, B.dtype)
-        else: ctype = C.dtype
-
         # m_args provide a key to the modules dictionary
         m_args = (A.dtype, B.dtype, ctype, accum)
         try:
@@ -167,44 +175,53 @@ class Semiring(ContextDecorator):
     def eval(self, op, A, B, C, accum):
 
         # if A or B need to be evaluated before continuing
-        if callable(A): A()
-        if callable(B): B()
+        if callable(A): A = A()
+        if callable(B): B = B()
 
-        def part(C=None, accum=accum):
+        def part(accum, C=None,  mask=type(C).no_mask, replace_flag=False):
             # get empty matrix with the correct output size
-            if C is None: C = A._combine(B)
+            if C is None: C = A._get_out_shape(B)
             m = self._get_module(A, B, C, accum)
             getattr(m, op)(
                     C.mat, 
                     A.mat, 
                     B.mat, 
-                    C._mask, 
-                    C._repl
+                    mask, 
+                    replace_flag
             )
             return C
 
-        if C is None: return part
-        else: return part(C)
+        if accum is None:
+            accum = ops.accumulator
+
+        # if C is a masked container
+        if isinstance(C, tuple):
+            return part(accum, *C)
+
+        elif C is not None:
+            return part(accum, C)
+
+        else: return part
 
     # mask and replace are configured at evaluation by C param
     # accum is optionally configured at evaluation
     def eWiseAdd(self, A, B, C=None, accum=None):
-        return self._partial("eWiseAdd", A, B, C, accum)
+        return self.eval("eWiseAdd", A, B, C, accum)
 
     def dot(self, A, B, C=None, accum=None):
         pass
 
     def eWiseMult(self, A, B, C=None, accum=None):
-        return self._partial("eWiseMult", A, B, C, accum)
+        return self.eval("eWiseMult", A, B, C, accum)
 
     def mxm(self, A, B, C=None, accum=None):
-        return self._partial("mxm", A, B, C, accum)
+        return self.eval("mxm", A, B, C, accum)
 
     def mxv(self, A, B, C=None, accum=None):
-        return self._partial("mxv", A, B, C, accum)
+        return self.eval("mxv", A, B, C, accum)
 
     def vxm(self, A, B, C=None, accum=None):
-        return self._partial("vxm", A, B, C, accum)
+        return self.eval("vxm", A, B, C, accum)
 
     def __enter__(self):
         global semiring

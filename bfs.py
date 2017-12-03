@@ -26,13 +26,58 @@ def index_of_1based(vector):
     print(vector)
 
 def bfs(graph, wavefront):
+    
+
     parent_list = gb.Vector([i for i in range(10)])
     wavefront = gb.Vector([-10] + [0] * 9)
-    wavefront1 = gb.Vector([1] + [0] * 9)
+    wavefront1 = gb.Vector([1] * 10)
 
+    wavefront[:] += wavefront1
+
+    parent_list += wavefront
+
+    print(wavefront)
+    print(parent_list)
+
+    exit()
+
+    Add2 = Apply("Plus", 2)
+
+    graph[:] = Add2(graph)
+
+    graph[::2,::,True] = Add2(graph)
+
+    print(graph)
+
+    exit()
+
+    #wavefront1[2:3]
+    #print(dir(wavefront1))
+    #print(wavefront._mask)
+
+    wavefront[::2, True] += wavefront1
+    print(wavefront)
+
+    exit()
 
     print(parent_list)
     print(wavefront)
+
+    Subtract2 = Apply("Minus", 2)
+    DivideBy2 = Apply("Times", 0.5)
+
+    wavefront = Subtract2(wavefront)
+    print("WAVEFRONT", wavefront)
+    wavefront = wavefront()
+    print("WAVEFRONT", wavefront)
+    wavefront = DivideBy2(wavefront)
+    print("WAVEFRONT", wavefront)
+    wavefront = wavefront()
+    print("WAVEFRONT", wavefront)
+
+    exit()
+
+    print((parent_list + wavefront + wavefront1)())
 
     exit()
 
