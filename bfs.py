@@ -32,9 +32,34 @@ def bfs(graph, wavefront):
     wavefront = gb.Vector([-10] + [0] * 9)
     wavefront1 = gb.Vector([1] * 10)
 
-    Add2 = Apply("Plus", 2)
 
-    graph[:] = Add2(graph)
+    Add2 = Apply("Plus", 2)
+    print(wavefront1)
+    wavefront[:] = wavefront1
+    print(wavefront)
+
+
+    Multiply2 = Apply("Times", 2)
+
+    #print(graph)
+    #graph[:] += Add2(graph)
+    #print(graph)
+    #graph[:] += Add2(graph)
+    #print(graph)
+
+    #print(Multiply2(graph))
+    #print(Multiply2(graph)())
+
+    exit()
+
+    for i in range(2):
+        graph[:] = Add2(graph)
+        print(graph)
+
+    graph[:] += graph
+
+    print("masked")
+    print(graph[::2,::,True]) 
 
     graph[::2,::,True] = Add2(graph)
 

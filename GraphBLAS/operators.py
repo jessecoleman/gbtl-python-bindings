@@ -1,4 +1,3 @@
-from functools import partial
 from contextlib import ContextDecorator
 from collections import namedtuple
 from GraphBLAS import compile_c as c
@@ -99,20 +98,60 @@ class Apply(object):
         self.bound_const = bound_const  # if operator is binary, bind constant
         self._modules = dict()
 
-    def _get_module(self, A, C, accum):
+    # partially applied
+    class expr(object):
         
-        # get module
-        m_args = (A.dtype, C.dtype, accum)
-        try:
-            module = self._modules[m_args]
-        except KeyError:
-            module = c.get_apply(
-                    self.apply_unary_op, 
-                    self.bound_const, 
-                    *m_args
+        def __init__(self, parent, A):
+            self.parent = parent
+            self.A = A
+
+        def _get_module(self, C, accum):
+            
+            # get module
+            m_args = (self.A.dtype, C.dtype, accum)
+
+            try:
+                module = self.parent._modules[m_args]
+            except KeyError:
+                module = c.get_apply(
+                        self.parent.apply_unary_op, 
+                        self.parent.bound_const, 
+                        *m_args
+                )
+                self.parent._modules[m_args] = module
+
+            return module
+
+        def __radd__(self, other):
+            if isinstance(other, tuple):
+                return self(other, accumulator)
+            elif isinstance(other, type(self.A)):
+                raise Exception("type")
+            raise Exception("type")
+
+        def __call__(self, C=None, accum=None):
+
+            mask = no_mask
+            replace_flag = False
+
+            if C is None:
+                out = self.A._get_out_shape()
+
+            elif isinstance(C, tuple):
+                out, mask, replace_flag = C
+
+            else: out = C
+
+            # accum is bound at the module level
+            m = self._get_module(out, accum)
+            # cpp function call
+            m.apply(
+                out.mat,
+                self.A.mat,
+                mask,
+                replace_flag
             )
-            self._modules[m_args] = module
-        return module
+            return out
 
     def __call__(self, A, C=None, accum=None):
 
@@ -120,37 +159,13 @@ class Apply(object):
         if callable(A): 
             A = A()
 
-        # return partial function
-        def part(accum, C=None, mask=None, replace_flag=False):
-            if C is None: C = A._get_out_shape()
-            if mask is None: mask = no_mask
-            # accum is bound at the module level
-            print("DEFERRED")
-            print(A, C, mask, replace_flag)
-            m = self._get_module(A, C, accum)
-            # cpp function call
-            m.apply(
-                C.mat,
-                A.mat,
-                mask,
-                replace_flag
-            )
-            return C
+        # return partial expression
+        if C is None:
+            return Apply.expr(self, A)
 
-        if accum is None:
-            accum = accumulator
-    
-        print("C:", C)
-        
-        if isinstance(C, tuple):
-            print("C:", C)
-            return part(accum, *C)
-
-        elif C is not None:
-            print("C:", C)
-            return part(accum, C)
-
-        else: return part
+        # return evaluated expression
+        else: 
+            return Apply.expr(self, A)(C)
 
 
 class Semiring(ContextDecorator):
@@ -169,16 +184,62 @@ class Semiring(ContextDecorator):
         )
         self._modules = dict()
 
-    def _get_module(self, A, B, C, accum):
+    class expr(object):
         
-        # m_args provide a key to the modules dictionary
-        m_args = (A.dtype, B.dtype, ctype, accum)
-        try:
-            module = self._modules[m_args]
-        except KeyError:
-            module = c.get_semiring(self._ops, *m_args)
-            self._modules[m_args] = module
-        return module
+        def __init__(self, parent, A, B):
+            self.parent = parent
+            self.A = A
+            self.B = B
+
+        def _get_module(self, C, accum):
+            
+            # m_args provide a key to the modules dictionary
+            m_args = (
+                    self.A.dtype, 
+                    self.B.dtype, 
+                    C.dtype, 
+                    accum
+            )
+
+            try:
+                module = self.parent._modules[m_args]
+
+            except KeyError:
+                module = c.get_semiring(self.parent._ops, *m_args)
+                self.parent._modules[m_args] = module
+
+            return module
+
+        def __radd__(self, other):
+            # C[:] += A + B
+            if isinstance(other, tuple):
+                return self(other)
+            raise Exception("type")
+
+        def __call__(self, C=None, accum=None):
+
+            mask = no_mask
+            replace_flag = False
+
+            if C is None:
+                out = self.A._get_out_shape(self.B)
+
+            elif isinstance(C, tuple):
+                out, mask, replace_flag = C
+
+            else: out = C
+
+            # accum is bound at the module level
+            m = self._get_module(out, accum)
+            # cpp function call
+            m.apply(
+                out.mat,
+                self.B.mat,
+                self.A.mat,
+                mask,
+                replace_flag
+            )
+            return out
 
     def eval(self, op, A, B, C, accum):
 
@@ -186,31 +247,11 @@ class Semiring(ContextDecorator):
         if callable(A): A = A()
         if callable(B): B = B()
 
-        def part(accum, C=None,  mask=None, replace_flag=False):
-            # get empty matrix with the correct output size
-            if C is None: C = A._get_out_shape(B)
-            if mask is None: mask = no_mask
-            m = self._get_module(A, B, C, accum)
-            getattr(m, op)(
-                    C.mat, 
-                    A.mat, 
-                    B.mat, 
-                    mask, 
-                    replace_flag
-            )
-            return C
+        if C is not None:
+            return Semiring.expr(self, A, B)(C)
 
-        if accum is None:
-            accum = ops.accumulator
-
-        # if C is a masked container
-        if isinstance(C, tuple):
-            return part(accum, *C)
-
-        elif C is not None:
-            return part(accum, C)
-
-        else: return part
+        else: 
+            return Semiring.expr(self, A, B)
 
     # mask and replace are configured at evaluation by C param
     # accum is optionally configured at evaluation

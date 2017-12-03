@@ -76,15 +76,12 @@ class Matrix(object):
         return ops.semiring.mxm(other, self)
 
     # create callable object from self and current accumulator
-    # self.__setitem__(self.__getitem__(item).__iadd__(assign))
     def __iadd__(self, expr):
+        raise Exception("use Matrix[:] notation to assign into matrix")
 
         # if already callable
         if callable(expr):
-            return expr(
-                    self, 
-                    accum=ops.accumulator
-            )
+            return expr(ops.accumulator, *self)
 
         # else convert to apply with Identity
         elif isinstance(expr, Matrix):
@@ -100,84 +97,77 @@ class Matrix(object):
 
     # applies mask stored in item and returns self
     def __getitem__(self, item):
-        print(item)
-    
-        if isinstance(item, tuple)\
-                and all(isinstance(i, int) for i in item):
-            if self.mat.hasElement(*item):
-                return self.mat.extractElement(*item)
-            else:
-                return ops.semiring.add_identity
 
-        mask = None
+        mask = ops.no_mask
         replace_flag = False
+    
+        if isinstance(item, tuple):
+            # must be 2 slices and bool
+            # self[0:N,0:M,True]
+            if len(item) == 3:
+                if isinstance(item[2], bool):
+                    *item, replace_flag = item
 
-        # if replace flag is set
+            # 2D index or slices or mask and bool
+            # self[1,1] or self[0:N,0:M] or self[M,True]
+            if len(item) == 2:
+                if all(isinstance(s, slice) for s in item):
+                    s_i, s_j = item
+                    item = None
+                    row_idx, col_idx, vals = [], [], []
+                    for i in range(*s_i.indices(self.shape[0])):
+                        for j in range(*s_j.indices(self.shape[0])):
+                            row_idx.append(i)
+                            col_idx.append(j)
+                            vals.append(True)
+                
+                    # build mask from slice data
+                    mask = Matrix(
+                            (vals,
+                            (row_idx, col_idx)), 
+                            shape=self.shape, 
+                            dtype=bool
+                    ).mat
+                
+                # index into matrix
+                elif all(isinstance(i, int) for i in item):
+                    if self.mat.hasElement(*item):
+                        return self.mat.extractElement(*item)
+                    else:
+                        return ops.semiring.add_identity
+                    item = None
+
+                elif isinstance(item[1], bool):
+                    item, replace_flag = item
+
         if isinstance(item, bool):
             replace_flag = item
 
-        elif isinstance(item, tuple):
-            # if single element access
-            if all(isinstance(i, int) for i in item):
-                if self.mat.hasElement(*item):
-                    return self.mat.extractElement(*item)
-                else: 
-                    return semiring._ops.add_identity
-
-            # if replace_flag is set
-            elif isinstance(item[-1], bool):
-                *item, replace_flag = item
-                item = tuple(item)
-
-        # no mask
-        if item == slice(None, None, None):
-            pass
-
-        # masking with slice
-        elif isinstance(item, tuple) and len(item) == 2\
-                and all(isinstance(s, slice) for s in item):
-            row_idx, col_idx, vals = [], [], []
-            for i in range(*item[0].indices(self.shape[0])):
-                for j in range(*item[1].indices(self.shape[1])):
-                    row_idx.append(i)
-                    col_idx.append(j)
-                    vals.append(True)
-
-            # mask self
-            mask = Matrix(
-                    (vals, 
-                    (row_idx, col_idx)), 
-                    shape=self.shape, 
-                    dtype=bool
-            ).mat
-
-        # masking with boolean Matrix
         elif isinstance(item, Matrix):
             mask = item.mat
 
-        else:
+        elif item == slice(None, None, None):
+            mask = ops.no_mask
+
+        elif item is not None:
             raise TypeError("Mask must be boolean Matrix or 2D slice with optional replace flag")
 
-        print("GET", self, mask, replace_flag)
         return self, mask, replace_flag
 
-    # self[item] += assign
-    # self.__setitem__(self.__getitem__(item).__iadd__(assign))
+    # NOTE if accum is expected, that gets handled in semiring or assign partial expression
+    # self[item] = assign
     def __setitem__(self, item, assign):
-
-        print("ASSIGN", assign)
 
         if isinstance(item, tuple)\
                 and all(isinstance(i, int) for i in item):
             self.mat.setElement(item, assign)
 
         elif callable(assign):
-            print("CALLABLE", self[item])
-            self = assign(ops.accumulator, *self[item])
-            print("SELF", self)
+            self = assign(self[item])
 
+        # TODO copy constructor
         elif isinstance(assign, Matrix):
-            self = assign
+            self.mat = assign.mat
 
         else: 
             raise TypeError("Matrix can be assigned to with integer indices or masks")
@@ -271,7 +261,8 @@ class Vector(object):
         if isinstance(other, tuple):
             return ops.Identity(self, other, ops.accumulator)
 
-        return ops.semiring.eWiseAdd(other, self)
+        else:
+            return ops.semiring.eWiseAdd(other, self)
 
     def __mul__(self, other):
         return ops.semiring.eWiseMult(self, other)
@@ -286,6 +277,7 @@ class Vector(object):
         return ops.semiring.mxv(other, self)
 
     def __iadd__(self, expr):
+        raise Exception("use Vector[:] notation to assign into vector")
 
         # if already callable
         if callable(expr):
@@ -302,51 +294,52 @@ class Vector(object):
         else: 
             raise TypeError("Evaluation was not deferred")
 
-    # self.__setitem__(self.__getitem__(item).__iadd__(assign))
-    def __getitem__(self, item):
+    def __getitem__(self, *item):
 
-        if isinstance(item, int):
-            if self.vec.hasElement(item):
-                return self.vec.extractElement(item)
-            else:
-                return semiring.add_identity
-
-        mask = None
+        # TODO double check vector logic
+        mask = ops.no_mask
         replace_flag = False
+    
+        if isinstance(item, tuple):
+            # self[0:N,True]
+            if len(item) == 2:
+                if isinstance(item[1], bool):
+                    *item, replace_flag = item
 
-        # if replace flag is set
-        if isinstance(item, bool):
-            replace_flag = item
+            if len(item) == 1:
+                item = item[0]
 
-        # strip replace off end if it exists
-        elif isinstance(item, tuple):
-            if isinstance(item[-1], bool):
-                item, replace_flag = item
-
-        # no mask
         if item == slice(None, None, None):
-            pass
+            mask = ops.no_mask
 
-        # masking with slice
         elif isinstance(item, slice):
             idx, vals = [], []
             for i in range(*item.indices(self.shape[0])):
-                idx.append(i)
+                row_idx.append(i)
+                col_idx.append(j)
                 vals.append(True)
-
-            # mask self
+        
+            # build mask from slice data
             mask = Vector(
                     (vals, idx), 
                     shape=self.shape, 
                     dtype=bool
             ).vec
+        
+        elif isinstance(item, int):
+            if self.mat.hasElement(*item):
+                return self.mat.extractElement(item)
+            else:
+                return ops.semiring.add_identity
 
-        # masking with boolean Matrix
-        elif isinstance(item, Vector):
-            mask = item.vec
+        elif isinstance(item, bool):
+            replace_flag = item
 
-        else:
-            raise TypeError("Mask must have type Vector or slice")
+        elif isinstance(item, Matrix):
+            mask = item.mat
+
+        elif item is not None:
+            raise TypeError("Mask must be boolean Matrix or 2D slice with optional replace flag")
 
         return self, mask, replace_flag
 
@@ -358,8 +351,9 @@ class Vector(object):
         elif callable(assign):
             self = assign(self[item])
         
+        # TODO copy
         elif isinstance(assign, Vector):
-            self = assign
+            self.vec = assign.vec
 
         else:
             raise TypeError("Vectors can be assigned to with integer indices or masks")
