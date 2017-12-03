@@ -75,14 +75,12 @@ class Accumulator(ContextDecorator):
 
     def __enter__(self):
         global accumulator
-        # save accumulator precedence
         Accumulator.stack.append(accumulator)
         accumulator = self
         return self
 
     def __exit__(self, *errors):
         global accumulator
-        # reset accumulator
         accumulator = Accumulator.stack.pop()
         return False
 
@@ -122,14 +120,14 @@ class Apply(object):
 
             return module
 
+        # TODO check that accumulate behavior is correct here
         def __radd__(self, other):
             if isinstance(other, tuple):
-                return self(other, accumulator)
-            elif isinstance(other, type(self.A)):
+                return self.eval(other, accumulator)
+            else:
                 raise Exception("type")
-            raise Exception("type")
 
-        def __call__(self, C=None, accum=None):
+        def eval(self, C, accum):
 
             mask = no_mask
             replace_flag = False
@@ -154,6 +152,8 @@ class Apply(object):
             return out
 
     def __call__(self, A, C=None, accum=None):
+        if C is None and accum is not None:
+            raise Exception("if accum is defined, expression needs to be evaluated on the spot")
 
         # evaluate A before performing apply
         if callable(A): 
@@ -165,7 +165,7 @@ class Apply(object):
 
         # return evaluated expression
         else: 
-            return Apply.expr(self, A)(C)
+            return Apply.expr(self, A).eval(C, accum)
 
 
 class Semiring(ContextDecorator):
@@ -210,13 +210,15 @@ class Semiring(ContextDecorator):
 
             return module
 
+        # TODO check that accumulate behavior is correct here
         def __radd__(self, other):
             # C[:] += A + B
             if isinstance(other, tuple):
-                return self(other)
-            raise Exception("type")
+                return self.eval(other, accumulator)
+            else:
+                raise Exception("type")
 
-        def __call__(self, C=None, accum=None):
+        def eval(self, C, accum):
 
             mask = no_mask
             replace_flag = False
@@ -241,14 +243,17 @@ class Semiring(ContextDecorator):
             )
             return out
 
-    def eval(self, op, A, B, C, accum):
+    # TODO decide how to pass accum in
+    def partial(self, op, A, B, C, accum):
+        if C is None and accum is not None:
+            raise Exception("if accum is defined, expression needs to be evaluated on the spot")
 
         # if A or B need to be evaluated before continuing
         if callable(A): A = A()
         if callable(B): B = B()
 
         if C is not None:
-            return Semiring.expr(self, A, B)(C)
+            return Semiring.expr(self, A, B).eval(C, accum)
 
         else: 
             return Semiring.expr(self, A, B)
@@ -256,33 +261,31 @@ class Semiring(ContextDecorator):
     # mask and replace are configured at evaluation by C param
     # accum is optionally configured at evaluation
     def eWiseAdd(self, A, B, C=None, accum=None):
-        return self.eval("eWiseAdd", A, B, C, accum)
+        return self.partial("eWiseAdd", A, B, C, accum)
 
     def dot(self, A, B, C=None, accum=None):
         pass
 
     def eWiseMult(self, A, B, C=None, accum=None):
-        return self.eval("eWiseMult", A, B, C, accum)
+        return self.partial("eWiseMult", A, B, C, accum)
 
     def mxm(self, A, B, C=None, accum=None):
-        return self.eval("mxm", A, B, C, accum)
+        return self.partial("mxm", A, B, C, accum)
 
     def mxv(self, A, B, C=None, accum=None):
-        return self.eval("mxv", A, B, C, accum)
+        return self.partial("mxv", A, B, C, accum)
 
     def vxm(self, A, B, C=None, accum=None):
-        return self.eval("vxm", A, B, C, accum)
+        return self.partial("vxm", A, B, C, accum)
 
     def __enter__(self):
         global semiring
-        # save semiring precedence
         Semiring.stack.append(semiring)
         semiring = self
         return self
 
     def __exit__(self, *errors):
         global semiring
-        # reset semiring
         semring = Semiring.stack.pop()
         return False
 
