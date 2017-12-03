@@ -25,3 +25,6 @@ apply: binding_apply.cpp
 
 accumulate: binding_accumulators.cpp
 	$(CXX) $(CXXFLAGS) -o $(DIR)$(MODULE)$(PYEXT) -DMODULE=$(MODULE) -DATYPE=$(ATYPE) -DBTYPE=$(BTYPE) -DCTYPE=$(CTYPE) -DADD_BINARYOP=$(ADD_BINARYOP) -DADD_IDENTITY=$(ADD_IDENTITY) -DMIN_IDENTITY=$(MIN_IDENTITY) -DMULT_BINARYOP=$(MULT_BINARYOP) -DACCUM_BINARYOP=$(ACCUM_BINARYOP) -DNO_ACCUM=$(NO_ACCUM) -DHAVE_CONFIG_H -DGB_USE_SEQUENTIAL -I$(DIR). -I$(GB_SOURCE) $(PYBIND1) $(PYBIND2) $(PYBIND3) -MT graphblas$(PYEXT) -MD -MP -MF $(DIR).deps/binding.Tpo $(DIR)binding_accumulators.cpp
+
+utilities: binding_utilities.cpp
+	$(CXX) $(CXXFLAGS) -o $(DIR)$(MODULE)$(PYEXT) -DMODULE=$(MODULE) -DHAVE_CONFIG_H -DGB_USE_SEQUENTIAL -I$(DIR). -I$(GB_SOURCE) $(PYBIND1) $(PYBIND2) $(PYBIND3) -MT graphblas$(PYEXT) -MD -MP -MF $(DIR).deps/binding.Tpo $(DIR)binding_utilities.cpp

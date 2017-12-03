@@ -32,15 +32,6 @@ def bfs(graph, wavefront):
     wavefront = gb.Vector([-10] + [0] * 9)
     wavefront1 = gb.Vector([1] * 10)
 
-    wavefront[:] += wavefront1
-
-    parent_list += wavefront
-
-    print(wavefront)
-    print(parent_list)
-
-    exit()
-
     Add2 = Apply("Plus", 2)
 
     graph[:] = Add2(graph)

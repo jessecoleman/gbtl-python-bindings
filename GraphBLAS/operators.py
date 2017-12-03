@@ -27,6 +27,7 @@ __all__ = [
 
 accumulator = None
 semiring = None
+no_mask = c.utilities().NoMask()
 
 
 # dictionary of values to build operators
@@ -120,9 +121,12 @@ class Apply(object):
             A = A()
 
         # return partial function
-        def part(accum, C=None, mask=type(A).no_mask, replace_flag=False):
+        def part(accum, C=None, mask=None, replace_flag=False):
             if C is None: C = A._get_out_shape()
+            if mask is None: mask = no_mask
             # accum is bound at the module level
+            print("DEFERRED")
+            print(A, C, mask, replace_flag)
             m = self._get_module(A, C, accum)
             # cpp function call
             m.apply(
@@ -135,11 +139,15 @@ class Apply(object):
 
         if accum is None:
             accum = accumulator
-
+    
+        print("C:", C)
+        
         if isinstance(C, tuple):
+            print("C:", C)
             return part(accum, *C)
 
         elif C is not None:
+            print("C:", C)
             return part(accum, C)
 
         else: return part
@@ -178,9 +186,10 @@ class Semiring(ContextDecorator):
         if callable(A): A = A()
         if callable(B): B = B()
 
-        def part(accum, C=None,  mask=type(C).no_mask, replace_flag=False):
+        def part(accum, C=None,  mask=None, replace_flag=False):
             # get empty matrix with the correct output size
             if C is None: C = A._get_out_shape(B)
+            if mask is None: mask = no_mask
             m = self._get_module(A, B, C, accum)
             getattr(m, op)(
                     C.mat, 

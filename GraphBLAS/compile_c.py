@@ -54,6 +54,11 @@ def upcast(atype, btype):
             py_types.index(btype)
     )][0]
 
+def utilities():
+    module = "utilities"
+    module = hashlib.sha1(module.encode("utf-8")).hexdigest()
+    return _get_module("utilities", module)
+
 def get_container(atype):
     module = "at_" + types[atype]
     module = hashlib.sha1(module.encode("utf-8")).hexdigest()

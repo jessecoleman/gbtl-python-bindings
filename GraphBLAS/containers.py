@@ -6,8 +6,6 @@ import GraphBLAS.operators as ops
 
 class Matrix(object):
 
-    no_mask = c.get_container(bool).NoMask()
-
     def __init__(self, m=None, shape=None, dtype=None):
         # require matrix or shape and type
         if m is None and (shape is None or dtype is None):
@@ -77,54 +75,47 @@ class Matrix(object):
     def __rmatmul__(self, other):
         return ops.semiring.mxm(other, self)
 
-    # TODO check if iadd is necessary
     # create callable object from self and current accumulator
     # self.__setitem__(self.__getitem__(item).__iadd__(assign))
-#    def __iadd__(self, expr):
-#        print(self, expr)
-#
-#        # if already callable
-#        if callable(expr):
-#            return lambda: expr(
-#                    self, 
-#                    accum=ops.accumulator
-#            )
-#
-#        # else convert to apply with Identity
-#        elif isinstance(expr, Matrix):
-#            # lazily evaluates Apply object
-#            return lambda: ops.Identity(
-#                    expr, 
-#                    self, 
-#                    accum=ops.accumulator
-#            )
-#
-#        else: 
-#            raise TypeError("Evaluation was not deferred")
+    def __iadd__(self, expr):
 
-    # self.__setitem__(self.__getitem__(item).__iadd__(assign))
+        # if already callable
+        if callable(expr):
+            return expr(
+                    self, 
+                    accum=ops.accumulator
+            )
+
+        # else convert to apply with Identity
+        elif isinstance(expr, Matrix):
+            # lazily evaluates Apply object
+            return ops.Identity(
+                    expr, 
+                    self, 
+                    accum=ops.accumulator
+            )
+
+        else: 
+            raise TypeError("Evaluation was not deferred")
+
     # applies mask stored in item and returns self
     def __getitem__(self, item):
+        print(item)
     
         if isinstance(item, tuple)\
                 and all(isinstance(i, int) for i in item):
-            if self.hasElement(*item):
-                return self.extractElement(*item)
+            if self.mat.hasElement(*item):
+                return self.mat.extractElement(*item)
             else:
                 return ops.semiring.add_identity
 
-        mask = Matrix.no_mask
+        mask = None
         replace_flag = False
-
-        # no mask
-        if item == slice(None, None, None):
-            pass
 
         # if replace flag is set
         if isinstance(item, bool):
             replace_flag = item
 
-        # strip replace off end if it exists
         elif isinstance(item, tuple):
             # if single element access
             if all(isinstance(i, int) for i in item):
@@ -133,12 +124,17 @@ class Matrix(object):
                 else: 
                     return semiring._ops.add_identity
 
-            if isinstance(item[-1], bool):
+            # if replace_flag is set
+            elif isinstance(item[-1], bool):
                 *item, replace_flag = item
                 item = tuple(item)
 
+        # no mask
+        if item == slice(None, None, None):
+            pass
+
         # masking with slice
-        if isinstance(item, tuple) and len(item) == 2\
+        elif isinstance(item, tuple) and len(item) == 2\
                 and all(isinstance(s, slice) for s in item):
             row_idx, col_idx, vals = [], [], []
             for i in range(*item[0].indices(self.shape[0])):
@@ -162,18 +158,23 @@ class Matrix(object):
         else:
             raise TypeError("Mask must be boolean Matrix or 2D slice with optional replace flag")
 
+        print("GET", self, mask, replace_flag)
         return self, mask, replace_flag
 
     # self[item] += assign
     # self.__setitem__(self.__getitem__(item).__iadd__(assign))
     def __setitem__(self, item, assign):
 
+        print("ASSIGN", assign)
+
         if isinstance(item, tuple)\
-                and all(isinstance(i) for i in item):
+                and all(isinstance(i, int) for i in item):
             self.mat.setElement(item, assign)
 
         elif callable(assign):
-            self = assign(self[item])
+            print("CALLABLE", self[item])
+            self = assign(ops.accumulator, *self[item])
+            print("SELF", self)
 
         elif isinstance(assign, Matrix):
             self = assign
@@ -217,8 +218,6 @@ class Matrix(object):
 
 
 class Vector(object):
-
-    no_mask = c.get_container(bool).NoMask()
 
     def __init__(self, v=None, shape=None, dtype=None):
         # require vector or shape and type
@@ -265,7 +264,8 @@ class Vector(object):
     def __add__(self, other):
         return ops.semiring.eWiseAdd(self, other)
 
-    # if trying to add masked object with self
+    # other = vector, mask, replace
+    # other + self
     def __radd__(self, other):
         # if assignment
         if isinstance(other, tuple):
@@ -306,12 +306,12 @@ class Vector(object):
     def __getitem__(self, item):
 
         if isinstance(item, int):
-            if self.hasElement(item):
-                return self.extractElement(item)
+            if self.vec.hasElement(item):
+                return self.vec.extractElement(item)
             else:
                 return semiring.add_identity
 
-        mask = Vector.no_mask
+        mask = None
         replace_flag = False
 
         # if replace flag is set

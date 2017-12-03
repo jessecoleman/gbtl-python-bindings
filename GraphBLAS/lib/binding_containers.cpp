@@ -154,9 +154,4 @@ std::vector<ScalarT> extract_vector(VectorT v) {
 PYBIND11_MODULE(MODULE, m) {
     define_matrix(m);
     define_vector<VectorT>(m);
-
-#if MASK == 1
-    py::class_<GraphBLAS::NoMask>(m, "NoMask")
-        .def(py::init<>());
-#endif
 }
