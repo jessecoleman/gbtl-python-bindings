@@ -94,7 +94,7 @@ void define_vector(py::module &m)
         }, py::is_operator());
 
     py::class_<VectorCompT>(m, "VectorComplementView")
-        .def("__str__", &print<MatrixCompT>);
+        .def("__str__", &print<VectorCompT>);
 
     m.def("init_sparse_vector", &init_sparse_vector);
 }

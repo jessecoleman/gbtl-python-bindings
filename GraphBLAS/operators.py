@@ -65,6 +65,21 @@ identities = OperatorMap({
 })
 
 
+class Masked(object):
+
+    def __init__(self, container, mask, replace_flag):
+        self.container = container
+        self.mask = mask
+        self.replace_flag = replace_flag
+
+    def __iadd__(self, other):
+        if hasattr(other, "eval"):
+            return other.eval(self, accumulator)
+        
+        else:
+            return Identity(other).eval(self, accumulator)
+
+
 class Accumulator(ContextDecorator):
 
     # keep track of accum precedence
@@ -120,14 +135,7 @@ class Apply(object):
 
             return module
 
-        # TODO check that accumulate behavior is correct here
-        def __radd__(self, other):
-            if isinstance(other, tuple):
-                return self.eval(other, accumulator)
-            else:
-                raise Exception("type")
-
-        def eval(self, C, accum):
+        def eval(self, C=None, accum=None):
 
             mask = no_mask
             replace_flag = False
@@ -135,8 +143,10 @@ class Apply(object):
             if C is None:
                 out = self.A._get_out_shape()
 
-            elif isinstance(C, tuple):
-                out, mask, replace_flag = C
+            elif isinstance(C, Masked):
+                out = C.container
+                mask = C.mask
+                replace_flag = C.replace_flag
 
             else: out = C
 
@@ -150,6 +160,9 @@ class Apply(object):
                 replace_flag
             )
             return out
+
+        def __str__(self):
+            return str(self.eval(None, None))
 
     def __call__(self, A, C=None, accum=None):
         if C is None and accum is not None:
@@ -186,8 +199,9 @@ class Semiring(ContextDecorator):
 
     class expr(object):
         
-        def __init__(self, parent, A, B):
+        def __init__(self, parent, op, A, B):
             self.parent = parent
+            self.op = op
             self.A = A
             self.B = B
 
@@ -210,53 +224,52 @@ class Semiring(ContextDecorator):
 
             return module
 
-        # TODO check that accumulate behavior is correct here
-        def __radd__(self, other):
-            # C[:] += A + B
-            if isinstance(other, tuple):
-                return self.eval(other, accumulator)
-            else:
-                raise Exception("type")
-
-        def eval(self, C, accum):
-
+        def eval(self, C=None, accum=None):
+            
             mask = no_mask
             replace_flag = False
 
             if C is None:
                 out = self.A._get_out_shape(self.B)
 
-            elif isinstance(C, tuple):
-                out, mask, replace_flag = C
+            elif isinstance(C, Masked):
+                out = C.container
+                mask = C.mask
+                replace_flag = C.replace_flag
 
             else: out = C
 
             # accum is bound at the module level
             m = self._get_module(out, accum)
             # cpp function call
-            m.apply(
+            getattr(m, self.op)(
                 out.mat,
-                self.B.mat,
                 self.A.mat,
+                self.B.mat,
                 mask,
                 replace_flag
             )
             return out
 
+        def __str__(self):
+            return str(self.eval(None, None))
+
     # TODO decide how to pass accum in
     def partial(self, op, A, B, C, accum):
+        
         if C is None and accum is not None:
             raise Exception("if accum is defined, expression needs to be evaluated on the spot")
 
         # if A or B need to be evaluated before continuing
+        # TODO pass params into eval
         if hasattr(A, "eval"): A = A.eval()
         if hasattr(B, "eval"): B = B.eval()
 
         if C is not None:
-            return Semiring.expr(self, A, B).eval(C, accum)
+            return Semiring.expr(self, op, A, B).eval(C, accum)
 
         else: 
-            return Semiring.expr(self, A, B)
+            return Semiring.expr(self, op, A, B)
 
     # mask and replace are configured at evaluation by C param
     # accum is optionally configured at evaluation

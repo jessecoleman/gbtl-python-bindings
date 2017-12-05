@@ -2,138 +2,72 @@ import GraphBLAS as gb
 from GraphBLAS.operators import *
 
 def index_of_1based(vector):
-    parent_list = gb.Vector([1] + [0] * 9)
     i, j, v = [],[],[]
     
     for idx in range(len(vector)):
         i.append(idx)
         j.append(idx)
-        v.append(idx+2)
+        v.append(idx+1)
 
     identity_ramp = gb.Matrix((v,(i,j)))
 
-    subtract_1 = Apply("Minus", 1)
-
-    print(vector)
-    print(identity_ramp)
-    print(~parent_list)
-    print("CLOSURE")
-    print(subtract_1(parent_list)(parent_list))
-
     with MinSelect2ndSemiring:
-        vector[~parent_list] = vector @ identity_ramp
+        vector[True] = vector @ identity_ramp
 
-    print(vector)
+    return vector
 
 def bfs(graph, wavefront):
-    
 
-    parent_list = gb.Vector([i for i in range(10)])
-    wavefront = gb.Vector([-10] + [0] * 9)
-    wavefront1 = gb.Vector([1] * 10)
+    parent_list = gb.Vector([i for i in range(20)])
+    wavefront = gb.Vector([1] + [0] * 19)
 
-
-    Add2 = Apply("Plus", 2)
-    print(wavefront1)
-    wavefront[:] = wavefront1
     print(wavefront)
 
+    add_20 = Apply("Plus", 20)
 
-    Multiply2 = Apply("Times", 2)
-
-    #print(graph)
-    #graph[:] += Add2(graph)
-    #print(graph)
-    #graph[:] += Add2(graph)
-    #print(graph)
-
-    #print(Multiply2(graph))
-    #print(Multiply2(graph)())
-
-    exit()
-
-    for i in range(2):
-        graph[:] = Add2(graph)
-        print(graph)
-
-    graph[:] += graph
-
-    print("masked")
-    print(graph[::2,::,True]) 
-
-    graph[::2,::,True] = Add2(graph)
+    result = add_20(graph).eval()
 
     print(graph)
+    print(result)
 
-    exit()
+    subtract_1 = Apply("Minus", 1)
+    print(wavefront[:])
 
-    #wavefront1[2:3]
-    #print(dir(wavefront1))
-    #print(wavefront._mask)
+    wavefront[:] = subtract_1(wavefront)
 
-    wavefront[::2, True] += wavefront1
     print(wavefront)
 
     exit()
 
-    print(parent_list)
-    print(wavefront)
-
-    Subtract2 = Apply("Minus", 2)
-    DivideBy2 = Apply("Times", 0.5)
-
-    wavefront = Subtract2(wavefront)
-    print("WAVEFRONT", wavefront)
-    wavefront = wavefront()
-    print("WAVEFRONT", wavefront)
-    wavefront = DivideBy2(wavefront)
-    print("WAVEFRONT", wavefront)
-    wavefront = wavefront()
-    print("WAVEFRONT", wavefront)
-
-    exit()
-
-    print((parent_list + wavefront + wavefront1)())
-
-    exit()
-
-    for i in range(5):
-        wavefront[:] += wavefront1 + parent_list
-        wavefront[:] = wavefront1
-        print("WAVEFRONT")
-        print(wavefront)
-
-    exit()
-
-    print((parent_list + wavefront)(wavefront1, ArithmeticAccumulate))
-    
-    exit()
-
-    with ArithmeticAccumulate:
-        wavefront[::2] += parent_list
-        print(wavefront)
-        (wavefront1 + parent_list)(wavefront)
-        print(wavefront)
-        (wavefront1 + parent_list)(wavefront)
-        print(wavefront)
+    wavefront = index_of_1based(wavefront)
 
     while wavefront.nvals > 0:
-        index_of_1based(wavefront)
 
-        print(wavefront)
+        wavefront = index_of_1based(wavefront)
+
         with MinSelect1stSemiring:
-            wavefront[~parent_list] = wavefront @ graph
-        print(wavefront)
+            wavefront[~parent_list,True] = wavefront @ graph
 
         with ArithmeticAccumulate:
-            parent_list += Identity(wavefront)
+            parent_list[:] += Identity(wavefront)
 
+        print(parent_list)
+
+    subtract_1 = Apply("Minus", 1)
+
+    parent_list[:,True] = subtract_1(parent_list)
+
+    print(parent_list)
 
 import numpy as np
 import scipy
 
-graph = np.random.rand(10,10)
-graph[graph > .6] = 1
-graph[graph <= .6] = 0
-bfs(gb.Matrix(scipy.sparse.coo_matrix(graph.astype("int64"))), None)
+i = [0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 5, 6, 6, 6, 8, 8]
+j = [3, 3, 6, 4, 5, 6, 8, 0, 1, 4, 6, 2, 3, 8, 2, 1, 2, 3, 2, 4]
+v = [1] * len(i)
+
+graph = gb.Matrix((v, (i, j)))
+
+print(graph)
+bfs(graph, None)
 

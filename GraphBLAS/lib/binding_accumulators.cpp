@@ -21,14 +21,14 @@ typedef GraphBLAS::Matrix<BScalarT> BMatrixT;
 typedef GraphBLAS::Matrix<CScalarT> CMatrixT;
 // vector mask types
 typedef GraphBLAS::Matrix<bool>     MMatrixT;
-typedef GraphBLAS::MatrixComplementView<MMatrixT> MMatrixCompT;
+typedef GraphBLAS::MatrixComplementView<CMatrixT> MatrixCompT;
 // vector storage type
 typedef GraphBLAS::Vector<AScalarT> UVectorT;
 typedef GraphBLAS::Vector<BScalarT> VVectorT;
 typedef GraphBLAS::Vector<CScalarT> WVectorT;
 // vector mask types
 typedef GraphBLAS::Vector<bool>     MVectorT;
-typedef GraphBLAS::VectorComplementView<MVectorT> MVectorCompT;
+typedef GraphBLAS::VectorComplementView<WVectorT> VectorCompT;
 
 typedef GraphBLAS::NoMask NoMaskT;
 
@@ -154,11 +154,11 @@ PYBIND11_MODULE(MODULE, m) {
     m.def("eWiseMult", &eWiseMultMatrix<MMatrixT>);
     m.def("eWiseMult", &eWiseMultVector<MVectorT>);
     // inverted masked
-    m.def("mxm", &mxm<MMatrixCompT>);
-    m.def("mxv", &mxv<MVectorCompT>);
-    m.def("vxm", &vxm<MVectorCompT>);
-    m.def("eWiseAdd", &eWiseAddMatrix<MMatrixCompT>);
-    m.def("eWiseAdd", &eWiseAddVector<MVectorCompT>);
-    m.def("eWiseMult", &eWiseMultMatrix<MMatrixCompT>);
-    m.def("eWiseMult", &eWiseMultVector<MVectorCompT>);
+    m.def("mxm", &mxm<MatrixCompT>);
+    m.def("mxv", &mxv<VectorCompT>);
+    m.def("vxm", &vxm<VectorCompT>);
+    m.def("eWiseAdd", &eWiseAddMatrix<MatrixCompT>);
+    m.def("eWiseAdd", &eWiseAddVector<VectorCompT>);
+    m.def("eWiseMult", &eWiseMultMatrix<MatrixCompT>);
+    m.def("eWiseMult", &eWiseMultVector<VectorCompT>);
 }
