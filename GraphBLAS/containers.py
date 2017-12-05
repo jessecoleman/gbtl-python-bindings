@@ -57,11 +57,7 @@ class Matrix(object):
         return ops.semring.eWiseAdd(self, other)
 
     def __radd__(self, other):
-        if isinstance(other, tuple):
-            return ops.Identity(self, other, ops.accumulator)
-
-        else:
-            return ops.semring.eWiseAdd(other, self)
+        return ops.semring.eWiseAdd(other, self)
 
     def __mul__(self, other):
         return ops.semiring.eWiseMult(self, other) 
@@ -87,8 +83,7 @@ class Matrix(object):
         if isinstance(item, tuple):
             # must be 2 slices and bool
             # self[0:N,0:M,True]
-            if len(item) == 3:
-                if isinstance(item[2], bool):
+            if len(item) == 3 and isinstance(item[2], bool):
                     *item, replace_flag = item
 
             # 2D index or slices or mask and bool
@@ -135,7 +130,7 @@ class Matrix(object):
         elif item is not None:
             raise TypeError("Mask must be boolean Matrix or 2D slice with optional replace flag")
 
-        return self, mask, replace_flag
+        return ops.Masked(self, mask, replace_flag)
 
     # NOTE if accum is expected, that gets handled in semiring or assign partial expression
     # self[item] = assign
@@ -171,18 +166,21 @@ class Matrix(object):
 
     # returns a new container with the correct output dimensions
     def _get_out_shape(self, other=None):
+        # output from apply
         if other is None:
             return Matrix(
                     shape=self.shape,
                     dtype=self.dtype
             )
             
+        # output from semiring operation
         ctype = c.upcast(self.dtype, other.dtype)
         if isinstance(other, Matrix): 
             return Matrix(
                     shape=(other.shape[0], self.shape[1]), 
                     dtype=ctype
             )
+
         elif isinstance(other, Vector): 
             return Vector(
                     shape=(self.shape[1],), 
@@ -240,12 +238,7 @@ class Vector(object):
     # other = vector, mask, replace
     # other + self
     def __radd__(self, other):
-        # if assignment
-        if isinstance(other, tuple):
-            return ops.Identity(self, other, ops.accumulator)
-
-        else:
-            return ops.semiring.eWiseAdd(other, self)
+        return ops.semiring.eWiseAdd(other, self)
 
     def __mul__(self, other):
         return ops.semiring.eWiseMult(self, other)
@@ -262,17 +255,15 @@ class Vector(object):
     def __iadd__(self, expr):
         raise Exception("use Vector[:] notation to assign into vector")
 
-    def __getitem__(self, *item):
+    def __getitem__(self, item):
 
-        # TODO double check vector logic
         mask = ops.no_mask
         replace_flag = False
     
         if isinstance(item, tuple):
             # self[0:N,True]
-            if len(item) == 2:
-                if isinstance(item[1], bool):
-                    *item, replace_flag = item
+            if len(item) == 2 and isinstance(item[1], bool):
+                *item, replace_flag = item
 
             if len(item) == 1:
                 item = item[0]
@@ -286,38 +277,38 @@ class Vector(object):
                 row_idx.append(i)
                 col_idx.append(j)
                 vals.append(True)
-        
+
             # build mask from slice data
             mask = Vector(
                     (vals, idx), 
                     shape=self.shape, 
                     dtype=bool
             ).vec
-        
-        elif isinstance(item, int):
-            if self.mat.hasElement(*item):
-                return self.mat.extractElement(item)
-            else:
-                return ops.semiring.add_identity
 
         elif isinstance(item, bool):
             replace_flag = item
+       
+        elif isinstance(item, int):
+            if self.vec.hasElement(item):
+                return self.vec.extractElement(item)
+            else:
+                return ops.semiring.add_identity
 
-        elif isinstance(item, Matrix):
-            mask = item.mat
+        elif isinstance(item, Vector):
+            mask = item.vec
 
         elif item is not None:
             raise TypeError("Mask must be boolean Matrix or 2D slice with optional replace flag")
 
-        return self, mask, replace_flag
+        return ops.Masked(self, mask, replace_flag)
 
     def __setitem__(self, item, assign):
 
-        if isinstance(item, int):
+        if isinstance(assign, int):
             self.vec.setElement(item, assign)
 
         elif hasattr(assign, "eval"):
-            self = assign.eval(self[item])
+            self = assign.eval(self[item], None)
         
         # TODO copy
         elif isinstance(assign, Vector):
@@ -325,7 +316,7 @@ class Vector(object):
 
         else:
             raise TypeError("Vectors can be assigned to with integer indices or masks")
-        
+
         return self
 
     def __invert__(self):
@@ -347,6 +338,7 @@ class Vector(object):
 
     # returns a new container with the correct output dimensions
     def _get_out_shape(self, other=None):
+
         if other is None:
             return Vector(
                     shape=self.shape,
@@ -359,6 +351,7 @@ class Vector(object):
                     shape=(other.shape[0],), 
                     dtype=ctype
             )
+
         elif isinstance(other, Vector): 
             return Vector(
                     shape=self.shape, 
