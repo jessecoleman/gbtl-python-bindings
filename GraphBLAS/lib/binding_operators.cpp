@@ -19,18 +19,22 @@ typedef CTYPE CScalarT;
 typedef GraphBLAS::Matrix<AScalarT> AMatrixT;
 typedef GraphBLAS::Matrix<BScalarT> BMatrixT;
 typedef GraphBLAS::Matrix<CScalarT> CMatrixT;
-// vector mask types
-typedef GraphBLAS::Matrix<bool>     MMatrixT;
-typedef GraphBLAS::MatrixComplementView<CMatrixT> MatrixCompT;
 // vector storage type
 typedef GraphBLAS::Vector<AScalarT> UVectorT;
 typedef GraphBLAS::Vector<BScalarT> VVectorT;
 typedef GraphBLAS::Vector<CScalarT> WVectorT;
-// vector mask types
-typedef GraphBLAS::Vector<bool>     MVectorT;
-typedef GraphBLAS::VectorComplementView<WVectorT> VectorCompT;
 
-typedef GraphBLAS::NoMask NoMaskT;
+// mask types
+#if MASK == 0
+typedef GraphBLAS::NoMask MMatrixT;
+typedef GraphBLAS::NoMask MVectorT;
+#elif MASK == 1
+typedef GraphBLAS::Matrix<MTYPE> MMatrixT;
+typedef GraphBLAS::Vector<MTYPE> MVectorT;
+#elif MASK == 2
+typedef GraphBLAS::MatrixComplementView<GraphBLAS::Matrix<MTYPE>> MMatrixT;
+typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<MTYPE>> MVectorT;
+#endif
 
 // in case additive identity isn't plain string
 #if MIN_IDENTITY == 1
@@ -40,9 +44,9 @@ typedef GraphBLAS::NoMask NoMaskT;
 #endif
 
 #if NO_ACCUM == 1
-#define ACCUM_BINOP ACCUM_BINARYOP
+typedef GraphBLAS::ACCUM_BINARYOP AccumT;
 #else
-#define ACCUM_BINOP ACCUM_BINARYOP<CScalarT>
+typedef GraphBLAS::ACCUM_BINARYOP<CScalarT> AccumT;
 #endif
 
 // create monoid and semiring from macro
@@ -53,75 +57,67 @@ typedef Monoid<CScalarT> MonoidT;
 typedef GraphBLAS::ADD_BINARYOP<AScalarT> AddBinaryOp;
 typedef GraphBLAS::MULT_BINARYOP<AScalarT, BScalarT, CScalarT> MultBinaryOp;
 typedef Semiring<AScalarT, BScalarT, CScalarT> SemiringT;
-typedef GraphBLAS::ACCUM_BINOP AccumT; 
  
-template<typename MaskT>
 // TODO check order of parameters
 void mxm(
         CMatrixT &C, 
-        BMatrixT const &B, 
+        MMatrixT const &mask, 
         AMatrixT const &A, 
-        MaskT const &mask,
+        BMatrixT const &B, 
         bool replace_flag
     )
-{ GraphBLAS::mxm(C, mask, AccumT(), SemiringT(), B, A, replace_flag); }
+{ GraphBLAS::mxm(C, mask, AccumT(), SemiringT(), A, B, replace_flag); }
 
-template<typename MaskT>
 void mxv(
         WVectorT &w, 
+        MVectorT const &mask, 
         AMatrixT const &A, 
-        UVectorT const &u, 
-        MaskT const &mask,
+        VVectorT const &v, 
         bool replace_flag
     )
-{ GraphBLAS::mxv(w, mask, AccumT(), SemiringT(), A, u, replace_flag); }
+{ GraphBLAS::mxv(w, mask, AccumT(), SemiringT(), A, v, replace_flag); }
 
-template<typename MaskT>
 void vxm(
         WVectorT &w, 
+        MVectorT const &mask, 
         UVectorT const &u, 
-        AMatrixT const &A, 
-        MaskT const &mask,
+        BMatrixT const &B, 
         bool replace_flag
     )
-{ GraphBLAS::vxm(w, mask, AccumT(), SemiringT(), u, A, replace_flag); }
+{ GraphBLAS::vxm(w, mask, AccumT(), SemiringT(), u, B, replace_flag); }
 
-template<typename MaskT>
 void eWiseAddMatrix(
         CMatrixT &C, 
+        MMatrixT const &mask, 
         AMatrixT const &A, 
         BMatrixT const &B, 
-        MaskT const &mask,
         bool replace_flag
     ) 
 { GraphBLAS::eWiseAdd(C, mask, AccumT(), AddBinaryOp(), A, B, replace_flag); }
 
-template<typename MaskT>
 void eWiseAddVector(
         WVectorT &w, 
+        MVectorT const &mask, 
         UVectorT const &u, 
         VVectorT const &v, 
-        MaskT const &mask,
         bool replace_flag
     ) 
 { GraphBLAS::eWiseAdd(w, mask, AccumT(), AddBinaryOp(), u, v, replace_flag); }
 
-template<typename MaskT>
 void eWiseMultMatrix(
         CMatrixT &C, 
+        MMatrixT const &mask, 
         AMatrixT const &A, 
         BMatrixT const &B, 
-        MaskT const &mask,
         bool replace_flag
     ) 
 { GraphBLAS::eWiseMult(C, mask, AccumT(), MultBinaryOp(), A, B, replace_flag); }
 
-template<typename MaskT>
 void eWiseMultVector(
         WVectorT &w, 
+        MVectorT const &mask, 
         UVectorT const &u, 
         VVectorT const &v, 
-        MaskT const &mask,
         bool replace_flag
     ) 
 { GraphBLAS::eWiseMult(w, mask, AccumT(), MultBinaryOp(), u, v, replace_flag); }
@@ -137,28 +133,11 @@ PYBIND11_MODULE(MODULE, m) {
         .def("mult", &SemiringT::mult)
         .def("zero", &SemiringT::zero);
 
-    // unmasked
-    m.def("mxm", &mxm<NoMaskT>);
-    m.def("mxv", &mxv<NoMaskT>);
-    m.def("vxm", &vxm<NoMaskT>);
-    m.def("eWiseAdd", &eWiseAddMatrix<NoMaskT>);
-    m.def("eWiseAdd", &eWiseAddVector<NoMaskT>);
-    m.def("eWiseMult", &eWiseMultMatrix<NoMaskT>);
-    m.def("eWiseMult", &eWiseMultVector<NoMaskT>);
-    // masked
-    m.def("mxm", &mxm<MMatrixT>);
-    m.def("mxv", &mxv<MVectorT>);
-    m.def("vxm", &vxm<MVectorT>);
-    m.def("eWiseAdd", &eWiseAddMatrix<MMatrixT>);
-    m.def("eWiseAdd", &eWiseAddVector<MVectorT>);
-    m.def("eWiseMult", &eWiseMultMatrix<MMatrixT>);
-    m.def("eWiseMult", &eWiseMultVector<MVectorT>);
-    // inverted masked
-    m.def("mxm", &mxm<MatrixCompT>);
-    m.def("mxv", &mxv<VectorCompT>);
-    m.def("vxm", &vxm<VectorCompT>);
-    m.def("eWiseAdd", &eWiseAddMatrix<MatrixCompT>);
-    m.def("eWiseAdd", &eWiseAddVector<VectorCompT>);
-    m.def("eWiseMult", &eWiseMultMatrix<MatrixCompT>);
-    m.def("eWiseMult", &eWiseMultVector<VectorCompT>);
+    m.def("mxm", &mxm);
+    m.def("mxv", &mxv);
+    m.def("vxm", &vxm);
+    m.def("eWiseAdd", &eWiseAddMatrix);
+    m.def("eWiseAdd", &eWiseAddVector);
+    m.def("eWiseMult", &eWiseMultMatrix);
+    m.def("eWiseMult", &eWiseMultVector);
 }

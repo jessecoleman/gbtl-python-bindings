@@ -26,8 +26,8 @@ __all__ = [
 
 accumulator = None
 semiring = None
-no_mask = c.utilities().NoMask()
 
+no_mask = c.utilities().NoMask()
 
 # dictionary of values to build operators
 class OperatorMap(dict):
@@ -65,7 +65,7 @@ identities = OperatorMap({
 })
 
 
-class Masked(object):
+class masked(object):
 
     def __init__(self, container, mask, replace_flag):
         self.container = container
@@ -79,6 +79,11 @@ class Masked(object):
         else:
             return Identity(other).eval(self, accumulator)
 
+class complement(object):
+    def __init__(self, container):
+        self.mat = ~container.mat
+        self.shape = container.shape
+        self.dtype = container.dtype
 
 class Accumulator(ContextDecorator):
 
@@ -118,10 +123,10 @@ class Apply(object):
             self.parent = parent
             self.A = A
 
-        def _get_module(self, C, accum):
-            
+        def _get_module(self, C, M, accum):
+
             # get module
-            m_args = (self.A.dtype, C.dtype, accum)
+            m_args = (self.A.dtype, C.dtype, M, accum)
 
             try:
                 module = self.parent._modules[m_args]
@@ -138,25 +143,34 @@ class Apply(object):
         def eval(self, C=None, accum=None):
 
             mask = no_mask
+            mtype = (None,)
             replace_flag = False
 
+            # called by self.eval()
             if C is None:
                 out = self.A._get_out_shape()
 
-            elif isinstance(C, Masked):
+            # called by any of C[:], C[0:N], C[M], C[~M]
+            elif isinstance(C, masked):
                 out = C.container
-                mask = C.mask
+                if isinstance(C.mask, complement):
+                    mask = C.mask.mat
+                    mtype = (C.mask.dtype, "~")
+                elif C.mask is not None:
+                    mask = C.mask.mat
+                    mtype = (C.mask.dtype, "")
                 replace_flag = C.replace_flag
 
+            # called by self.eval(C, accum)
             else: out = C
 
             # accum is bound at the module level
-            m = self._get_module(out, accum)
+            m = self._get_module(out, mtype, accum)
             # cpp function call
             m.apply(
                 out.mat,
-                self.A.mat,
                 mask,
+                self.A.mat,
                 replace_flag
             )
             return out
@@ -205,13 +219,14 @@ class Semiring(ContextDecorator):
             self.A = A
             self.B = B
 
-        def _get_module(self, C, accum):
-            
+        def _get_module(self, C, M, accum):
+
             # m_args provide a key to the modules dictionary
             m_args = (
                     self.A.dtype, 
                     self.B.dtype, 
                     C.dtype, 
+                    M,
                     accum
             )
 
@@ -227,26 +242,35 @@ class Semiring(ContextDecorator):
         def eval(self, C=None, accum=None):
             
             mask = no_mask
+            mtype = (None,)
             replace_flag = False
 
+            # called by self.eval()
             if C is None:
                 out = self.A._get_out_shape(self.B)
 
-            elif isinstance(C, Masked):
+            # called by any of C[:], C[0:N], C[M], C[~M]
+            elif isinstance(C, masked):
                 out = C.container
-                mask = C.mask
+                if isinstance(C.mask, complement):
+                    mask = C.mask.mat
+                    mtype = (C.mask.dtype, "~")
+                elif C.mask is not None:
+                    mask = C.mask.mat
+                    mtype = (C.mask.dtype, "")
                 replace_flag = C.replace_flag
 
+            # called by self.eval(C, accum)
             else: out = C
 
             # accum is bound at the module level
-            m = self._get_module(out, accum)
+            m = self._get_module(out, mtype, accum)
             # cpp function call
             getattr(m, self.op)(
                 out.mat,
+                mask,
                 self.A.mat,
                 self.B.mat,
-                mask,
                 replace_flag
             )
             return out
@@ -265,11 +289,9 @@ class Semiring(ContextDecorator):
         if hasattr(A, "eval"): A = A.eval()
         if hasattr(B, "eval"): B = B.eval()
 
-        if C is not None:
-            return Semiring.expr(self, op, A, B).eval(C, accum)
-
-        else: 
-            return Semiring.expr(self, op, A, B)
+        part = Semiring.expr(self, op, A, B)
+        if C is not None: return part.eval(C, accum)
+        else: return part
 
     # mask and replace are configured at evaluation by C param
     # accum is optionally configured at evaluation

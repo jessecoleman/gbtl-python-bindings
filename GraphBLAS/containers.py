@@ -77,7 +77,7 @@ class Matrix(object):
     # applies mask stored in item and returns self
     def __getitem__(self, item):
 
-        mask = ops.no_mask
+        mask = None
         replace_flag = False
     
         if isinstance(item, tuple):
@@ -105,7 +105,7 @@ class Matrix(object):
                             (row_idx, col_idx)), 
                             shape=self.shape, 
                             dtype=bool
-                    ).mat
+                    )
                 
                 # index into matrix
                 elif all(isinstance(i, int) for i in item):
@@ -122,15 +122,18 @@ class Matrix(object):
             replace_flag = item
 
         elif isinstance(item, Matrix):
-            mask = item.mat
+            mask = item
+
+        elif isinstance(item, ops.complement):
+            mask = item
 
         elif item == slice(None, None, None):
-            mask = ops.no_mask
+            mask = None
 
         elif item is not None:
             raise TypeError("Mask must be boolean Matrix or 2D slice with optional replace flag")
 
-        return ops.Masked(self, mask, replace_flag)
+        return ops.masked(self, mask, replace_flag)
 
     # NOTE if accum is expected, that gets handled in semiring or assign partial expression
     # self[item] = assign
@@ -154,7 +157,7 @@ class Matrix(object):
 
     # TODO double check that ~ copies instead of referencing
     def __invert__(self):
-        return Matrix((~self.mat, self.shape, self.dtype))
+        return ops.complement(self)
 
     @property
     def nvals(self):
@@ -257,7 +260,7 @@ class Vector(object):
 
     def __getitem__(self, item):
 
-        mask = ops.no_mask
+        mask = None
         replace_flag = False
     
         if isinstance(item, tuple):
@@ -269,7 +272,7 @@ class Vector(object):
                 item = item[0]
 
         if item == slice(None, None, None):
-            mask = ops.no_mask
+            mask = None
 
         elif isinstance(item, slice):
             idx, vals = [], []
@@ -283,7 +286,7 @@ class Vector(object):
                     (vals, idx), 
                     shape=self.shape, 
                     dtype=bool
-            ).vec
+            )
 
         elif isinstance(item, bool):
             replace_flag = item
@@ -295,12 +298,15 @@ class Vector(object):
                 return ops.semiring.add_identity
 
         elif isinstance(item, Vector):
-            mask = item.vec
+            mask = item
+
+        elif isinstance(item, ops.complement):
+            mask = item
 
         elif item is not None:
             raise TypeError("Mask must be boolean Matrix or 2D slice with optional replace flag")
 
-        return ops.Masked(self, mask, replace_flag)
+        return ops.masked(self, mask, replace_flag)
 
     def __setitem__(self, item, assign):
 
@@ -308,6 +314,7 @@ class Vector(object):
             self.vec.setElement(item, assign)
 
         elif hasattr(assign, "eval"):
+            print(self, item)
             self = assign.eval(self[item], None)
         
         # TODO copy
@@ -320,7 +327,7 @@ class Vector(object):
         return self
 
     def __invert__(self):
-        return Vector((~self.vec, self.shape, self.dtype))
+        return ops.complement(self)
 
     def __str__(self):
         return str(self.vec)

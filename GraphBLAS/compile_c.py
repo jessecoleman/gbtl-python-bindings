@@ -74,22 +74,33 @@ def get_algorithm(algorithm, atype, btype):
         c_types["ctype"] = types[upcast(atype, btype)]
     else: c_types["btype"] = ""
 
-    module  = "at" + types[atype]         \
-            + "bt" + types[btype]         \
+    module = (
+            "at" + types[atype]
+            + "bt" + types[btype]
             + "al" + algorithm
+    )
     module = hashlib.sha1(module.encode("utf-8")).hexdigest()
 
     args = c_types
     args.update({"alg": algorithm})
     return _get_module("algorithm", module, args)
 
-def get_apply(op, const, atype, ctype, accum):
-    c_types = {"atype": types[atype], "ctype": types[ctype]}
-    module  = "at" + types[atype]         \
-            + "ct" + types[atype]         \
-            + "ap" + op                    \
-            + "const" + str(const)         \
+def get_apply(op, const, atype, ctype, mtype, accum):
+
+    c_types = {
+            "atype": types[atype], 
+            "ctype": types[ctype],
+            "mtype": types[mtype[0]]
+    }
+
+    module = (
+            "at" + types[atype]
+            + "ct" + types[atype]
+            + "mt" + types[mtype[0]]
+            + "ap" + op
+            + "const" + str(const).replace(".","")
             + "ac" + str(accum)
+    )
     # generate unique module name from compiler parameters
     module = hashlib.sha1(module.encode("utf-8")).hexdigest()
 
@@ -101,6 +112,7 @@ def get_apply(op, const, atype, ctype, accum):
     else: 
         args["bound_second"] = 1
         args["bound_const"] = const
+
     # set default accumulate operator 
     if accum is None:
         args["accum_binaryop"] = "NoAccumulate"
@@ -108,20 +120,32 @@ def get_apply(op, const, atype, ctype, accum):
     else: 
         args["accum_binaryop"] = accum
         args["no_accum"] = 0
+
+    if mtype[0] is None:
+        args["mask"] = 0
+    elif mtype[1] == "":
+        args["mask"] = 1
+    elif mtype[1] == "~":
+        args["mask"] = 2
+
     return _get_module("apply", module, **args)
 
-def get_semiring(semiring, atype, btype, ctype, accum):
+def get_semiring(semiring, atype, btype, ctype, mtype, accum):
     # TODO accept ctype if accumulation is set
     c_types = {
             "atype": types[atype],
             "btype": types[btype],
             "ctype": types[ctype],
+            "mtype": types[mtype[0]]
     }
-    module  = "at" + types[atype]         \
-            + "bt" + types[btype]         \
-            + "ct" + types[ctype]         \
-            + "sr" + str(semiring)         \
+    module = (
+            "at" + types[atype]
+            + "bt" + types[btype]
+            + "ct" + types[ctype]
+            + "mt" + types[mtype[0]]
+            + "sr" + str(semiring)
             + "ac" + str(accum)
+    )
     # generate unique module name from compiler parameters
     module = hashlib.sha1(module.encode("utf-8")).hexdigest()
 
@@ -134,12 +158,21 @@ def get_semiring(semiring, atype, btype, ctype, accum):
     else: 
         args["accum_binaryop"] = accum
         args["no_accum"] = 0
+
     # set default min identity
     if semiring.add_identity == "MinIdentity":
         args["min_identity"] = 1 
     else:
         args["min_identity"] = 0
-    return _get_module("accumulate", module, **args)
+
+    if mtype[0] is None:
+        args["mask"] = 0
+    elif mtype[1] == "":
+        args["mask"] = 1
+    elif mtype[1] == "~":
+        args["mask"] = 2
+
+    return _get_module("operators", module, **args)
 
 def _get_module(target, module, **kwargs):
     # first look in dictionary
