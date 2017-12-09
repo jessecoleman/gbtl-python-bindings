@@ -79,11 +79,13 @@ class masked(object):
         else:
             return Identity(other).eval(self, accumulator)
 
+
 class complement(object):
     def __init__(self, container):
         self.mat = ~container.mat
         self.shape = container.shape
         self.dtype = container.dtype
+
 
 class Accumulator(ContextDecorator):
 

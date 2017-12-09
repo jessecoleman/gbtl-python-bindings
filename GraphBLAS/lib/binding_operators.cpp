@@ -19,10 +19,22 @@ typedef CTYPE CScalarT;
 typedef GraphBLAS::Matrix<AScalarT> AMatrixT;
 typedef GraphBLAS::Matrix<BScalarT> BMatrixT;
 typedef GraphBLAS::Matrix<CScalarT> CMatrixT;
+<<<<<<< HEAD:GraphBLAS/lib/binding_operators.cpp
+=======
+// vector mask types
+typedef GraphBLAS::Matrix<bool>     MMatrixT;
+typedef GraphBLAS::MatrixComplementView<CMatrixT> MatrixCompT;
+>>>>>>> b603f8f4b88a3605d1b6cf1fb94f9477294fce6e:GraphBLAS/lib/binding_accumulators.cpp
 // vector storage type
 typedef GraphBLAS::Vector<AScalarT> UVectorT;
 typedef GraphBLAS::Vector<BScalarT> VVectorT;
 typedef GraphBLAS::Vector<CScalarT> WVectorT;
+<<<<<<< HEAD:GraphBLAS/lib/binding_operators.cpp
+=======
+// vector mask types
+typedef GraphBLAS::Vector<bool>     MVectorT;
+typedef GraphBLAS::VectorComplementView<WVectorT> VectorCompT;
+>>>>>>> b603f8f4b88a3605d1b6cf1fb94f9477294fce6e:GraphBLAS/lib/binding_accumulators.cpp
 
 // mask types
 #if MASK == 0
