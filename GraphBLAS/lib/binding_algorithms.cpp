@@ -21,34 +21,9 @@ typedef GraphBLAS::Matrix<AScalarT> AMatrixT;
 typedef GraphBLAS::Matrix<BScalarT> BMatrixT;
 typedef GraphBLAS::Matrix<CScalarT> CMatrixT;
 // vector storage type
-typedef GraphBLAS::Vector<AScalarT> AVectorT;
-typedef GraphBLAS::Vector<BScalarT> BVectorT;
-typedef GraphBLAS::Vector<CScalarT> CVectorT;
-
-# ifdef BFS
-#include <algorithms/bfs.hpp>
-template <typename MatrixT, 
-          typename WavefrontMatrixT,
-          typename LevelListMatrixT>
-LevelListMatrixT bfs_level(MatrixT const &graph, WavefrontMatrixT wavefront) {
-    using namespace algorithms;
-    LevelListMatrixT parent_list(1, graph.nrows());
-    bfs_level(graph, wavefront, parent_list);
-    return parent_list;
-    //return extract_vector(parent_list);
-}
-
-template <typename MatrixT, 
-          typename WavefrontMatrixT, 
-          typename WavefrontVectorT, 
-          typename ParentListVectorT, 
-          typename LevelListVectorT>
-void define_bfs_algorithms(py::module &m) {
-    m.def("bfs_level", &bfs_level<MatrixT, WavefrontMatrixT, MatrixT>);
-    //m.def("bfs_level", &algorithms::bfs_level<MatrixT, WavefrontMatrixT, LevelListVectorT>);
-    //m.def("bfs_level_masked", &algorithms::bfs_level_masked<MatrixT, WavefrontVectorT, LevelListMatrixT>);
-}
-#endif
+typedef GraphBLAS::Vector<AScalarT> UVectorT;
+typedef GraphBLAS::Vector<BScalarT> VVectorT;
+typedef GraphBLAS::Vector<CScalarT> WVectorT;
 
 #ifdef MAXFLOW
 #include <algorithms/maxflow.hpp>
@@ -125,9 +100,15 @@ void define_tri_count_algorithms(py::module &m) {
 }
 #endif
 
+#ifdef BFS
+#include <algorithms/bfs.hpp>
+#endif
+
 PYBIND11_MODULE(MODULE, m) {
 #ifdef BFS
-    define_bfs_algorithms<GBMatrix, GBMatrix, GBVector, GBVector, GBVector>(m);
+    m.def("bfs", &algorithms::bfs<AMatrixT, VVectorT, WVectorT>);
+    m.def("bfs_batch", &algorithms::bfs_batch<AMatrixT, BMatrixT, CMatrixT>);
+    m.def("bfs_level", &algorithms::bfs_level<AMatrixT, BMatrixT, CMatrixT>);
 #endif
 #ifdef MAXFLOW
     define_maxflow_algorithms<GBMatrix, GBVector>(m);

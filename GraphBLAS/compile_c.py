@@ -60,30 +60,23 @@ def utilities():
     return _get_module("utilities", module)
 
 def get_container(atype):
-    module = "at_" + types[atype]
+    module = "at" + types[atype]
     module = hashlib.sha1(module.encode("utf-8")).hexdigest()
     args = {"atype": types[atype]}
-    if types[atype] == "bool": args["mask"] = 1
-    else: args["mask"] = 0
     return _get_module("container", module, **args)
 
-def get_algorithm(algorithm, atype, btype):
-    c_types = {"atype": types[atype]}
-    if btype is not None:
-        c_types["btype"] = types[btype]
-        c_types["ctype"] = types[upcast(atype, btype)]
-    else: c_types["btype"] = ""
+def get_algorithm(algorithm, *type):
 
-    module = (
-            "at" + types[atype]
-            + "bt" + types[btype]
-            + "al" + algorithm
+    c_types = OrderedDict(
+            [(chr(ord('a')+i) + "type", types[t]) for i, t in enumerate(type)]
     )
+
+    module = "".join([k[:2] + v for k, v in c_types.items()]) + "al" + algorithm
     module = hashlib.sha1(module.encode("utf-8")).hexdigest()
 
     args = c_types
-    args.update({"alg": algorithm})
-    return _get_module("algorithm", module, args)
+    args["alg"] = algorithm
+    return _get_module("algorithm", module, **args)
 
 def get_apply(op, const, atype, ctype, mtype, accum):
 

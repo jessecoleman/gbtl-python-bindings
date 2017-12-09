@@ -24,7 +24,7 @@ typedef GraphBLAS::Vector<CScalarT> WVectorT;
 // mask types
 #if MASK == 0
 typedef GraphBLAS::NoMask MMatrixT;
-typedef GraphBLAS::NoMask VMatrixT;
+typedef GraphBLAS::NoMask MVectorT;
 #elif MASK == 1
 typedef GraphBLAS::Matrix<MTYPE> MMatrixT;
 typedef GraphBLAS::Vector<MTYPE> MVectorT;

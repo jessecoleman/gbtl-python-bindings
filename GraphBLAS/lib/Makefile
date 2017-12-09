@@ -18,7 +18,7 @@ container: binding_containers.cpp
 	$(CXX) $(CXXFLAGS) -o $(DIR)$(MODULE)$(PYEXT) -DMODULE=$(MODULE) -DDTYPE=$(ATYPE) -DMASK=$(MASK) -DHAVE_CONFIG_H -DGB_USE_SEQUENTIAL -I$(DIR). -I$(GB_SOURCE) $(PYBIND1) $(PYBIND2) $(PYBIND3) -MT graphblas$(PYEXT) -MD -MP -MF $(DIR).deps/binding.Tpo $(DIR)binding_containers.cpp
 
 algorithm: binding_algorithms.cpp
-	$(CXX) $(CXXFLAGS) -o $(DIR)$(MODULE)$(PYEXT) -DMODULE=$(MODULE) -DDTYPE=$(DTYPE) -D$(ALG) -DHAVE_CONFIG_H -DGB_USE_SEQUENTIAL -I$(DIR). -I$(GB_SOURCE) $(PYBIND1) $(PYBIND2) $(PYBIND3) -MT graphblas$(PYEXT) -MD -MP -MF $(DIR).deps/binding.Tpo $(DIR)binding_algorithms.cpp
+	$(CXX) $(CXXFLAGS) -o $(DIR)$(MODULE)$(PYEXT) -DMODULE=$(MODULE) -DATYPE=$(ATYPE) -DBTYPE=$(BTYPE) -DCTYPE=$(CTYPE) -D$(ALG) -DHAVE_CONFIG_H -DGB_USE_SEQUENTIAL -I$(DIR). -I$(GB_SOURCE) $(PYBIND1) $(PYBIND2) $(PYBIND3) -MT graphblas$(PYEXT) -MD -MP -MF $(DIR).deps/binding.Tpo $(DIR)binding_algorithms.cpp
 
 apply: binding_apply.cpp
 	$(CXX) $(CXXFLAGS) -o $(DIR)$(MODULE)$(PYEXT) -DMODULE=$(MODULE) -DATYPE=$(ATYPE) -DCTYPE=$(CTYPE) -DMTYPE=$(MTYPE) -DAPPLY_OP=$(APPLY_OP) -DBOUND_SECOND=$(BOUND_SECOND) -DBOUND_CONST=$(BOUND_CONST) -DACCUM_BINARYOP=$(ACCUM_BINARYOP) -DNO_ACCUM=$(NO_ACCUM) -DMASK=$(MASK) -DHAVE_CONFIG_H -DGB_USE_SEQUENTIAL -I$(DIR). -I$(GB_SOURCE) $(PYBIND1) $(PYBIND2) $(PYBIND3) -MT graphblas$(PYEXT) -MD -MP -MF $(DIR).deps/binding.Tpo $(DIR)binding_apply.cpp

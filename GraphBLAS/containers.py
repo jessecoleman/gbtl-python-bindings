@@ -319,7 +319,6 @@ class Vector(object):
             self.vec.setElement(item, assign)
 
         elif hasattr(assign, "eval"):
-            print(self, item)
             self = assign.eval(self[item], None)
         
         # TODO copy

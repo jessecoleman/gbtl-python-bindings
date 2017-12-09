@@ -1,5 +1,6 @@
 import GraphBLAS as gb
 from GraphBLAS.operators import *
+from GraphBLAS import algorithms
 
 def index_of_1based(vector):
     i, j, v = [],[],[]
@@ -18,36 +19,29 @@ def index_of_1based(vector):
 
 def bfs(graph, wavefront):
 
-    parent_list = gb.Vector([i for i in range(20)])
-    wavefront = gb.Vector([1] + [0] * 19)
-
-    print(wavefront)
-
-    add_20 = Apply("Plus", 20)
-
-    result = add_20(graph).eval()
-
-    print(graph)
-    print(result)
-
-    subtract_1 = Apply("Minus", 1)
-    print(wavefront[:])
-
-    wavefront[:] = subtract_1(wavefront)
-
-    print(wavefront)
+    parents = algorithms.bfs(graph, 3)
+    print(parents)
 
     exit()
 
-    wavefront = index_of_1based(wavefront)
+    w = [0] * 9
+    w[3] = 1
+    wavefront = gb.Vector(w)
+    parent_list = gb.Vector(w)
+
+    parent_list = index_of_1based(parent_list)
+    print(graph)
 
     while wavefront.nvals > 0:
 
-        wavefront = index_of_1based(wavefront)
+        #wavefront = index_of_1based(wavefront)
+        print("wavefront1:",wavefront)
 
         with MinSelect1stSemiring:
             wavefront[~parent_list,True] = wavefront @ graph
 
+        print("wavefront2:",wavefront)
+        
         with ArithmeticAccumulate:
             parent_list[:] += Identity(wavefront)
 
@@ -66,8 +60,7 @@ i = [0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 5, 6, 6, 6, 8, 8]
 j = [3, 3, 6, 4, 5, 6, 8, 0, 1, 4, 6, 2, 3, 8, 2, 1, 2, 3, 2, 4]
 v = [1] * len(i)
 
-graph = gb.Matrix((v, (i, j)))
+graph = gb.Matrix((v, (i, j)), shape=(9,9))
 
-print(graph)
 bfs(graph, None)
 
