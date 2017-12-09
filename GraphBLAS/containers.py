@@ -54,7 +54,7 @@ class Matrix(object):
         return str(self.mat)
 
     def __add__(self, other):
-        return ops.semring.eWiseAdd(self, other)
+        return ops.semiring.eWiseAdd(self, other)
 
     def __radd__(self, other):
         return ops.semring.eWiseAdd(other, self)
@@ -66,10 +66,16 @@ class Matrix(object):
         return ops.semiring.eWiseMult(other, self) 
 
     def __matmul__(self, other):
-        return ops.semiring.mxm(self, other)
+        if isinstance(other, Matrix):
+            return ops.semiring.mxm(self, other)
+        elif isinstance(other, Vector):
+            return ops.semiring.mxv(self, other)
 
     def __rmatmul__(self, other):
-        return ops.semiring.mxm(other, self)
+        if isinstance(other, Matrix):
+            return ops.semiring.mxm(other, self)
+        elif isinstance(other, Vector):
+            return ops.semiring.vxm(other, self)
 
     def __iadd__(self, expr):
         raise Exception("use Matrix[:] notation to assign into matrix")
@@ -277,8 +283,7 @@ class Vector(object):
         elif isinstance(item, slice):
             idx, vals = [], []
             for i in range(*item.indices(self.shape[0])):
-                row_idx.append(i)
-                col_idx.append(j)
+                idx.append(i)
                 vals.append(True)
 
             # build mask from slice data

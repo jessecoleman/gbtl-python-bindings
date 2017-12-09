@@ -7,7 +7,7 @@ GB_SOURCE 	= /home/jessecoleman/graphpack/gbtl/src
 
 
 CXX			= g++
-CXXFLAGS	= $(OPTS) $(LANG) 
+CXXFLAGS	= $(OPTS) $(LANG) $(DEBUG)
 #PYBIND		= $(shell python3 -m pybind11 --includes)
 #PYEXT		= $(shell python3-config --extension-suffix)
 
