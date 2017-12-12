@@ -1,10 +1,9 @@
 import numpy as np
 from scipy import sparse
-from GraphBLAS import compile_c as c
-import GraphBLAS.operators as ops
+from . import compile_c as c
+from . import operators as ops
 
-
-class Matrix(object):
+class Matrix(ops.Container):
 
     def __init__(self, m=None, shape=None, dtype=None):
         # require matrix or shape and type
@@ -130,7 +129,7 @@ class Matrix(object):
         elif isinstance(item, Matrix):
             mask = item
 
-        elif isinstance(item, ops.complement):
+        elif isinstance(item, ops.Complement):
             mask = item
 
         elif item == slice(None, None, None):
@@ -139,7 +138,7 @@ class Matrix(object):
         elif item is not None:
             raise TypeError("Mask must be boolean Matrix or 2D slice with optional replace flag")
 
-        return ops.masked(self, mask, replace_flag)
+        return ops.Masked(self, mask, replace_flag)
 
     # NOTE if accum is expected, that gets handled in semiring or assign partial expression
     # self[item] = assign
@@ -163,7 +162,7 @@ class Matrix(object):
 
     # TODO double check that ~ copies instead of referencing
     def __invert__(self):
-        return ops.complement(self)
+        return ops.Complement(self)
 
     @property
     def nvals(self):
@@ -197,7 +196,7 @@ class Matrix(object):
             )
 
 
-class Vector(object):
+class Vector(ops.Container):
 
     def __init__(self, v=None, shape=None, dtype=None):
         # require vector or shape and type
@@ -305,21 +304,21 @@ class Vector(object):
         elif isinstance(item, Vector):
             mask = item
 
-        elif isinstance(item, ops.complement):
+        elif isinstance(item, ops.Complement):
             mask = item
 
         elif item is not None:
             raise TypeError("Mask must be boolean Matrix or 2D slice with optional replace flag")
 
-        return ops.masked(self, mask, replace_flag)
+        return ops.Masked(self, mask, replace_flag)
 
     def __setitem__(self, item, assign):
 
         if isinstance(assign, int):
             self.vec.setElement(item, assign)
 
-        elif hasattr(assign, "eval"):
-            self = assign.eval(self[item], None)
+        elif isinstance(assign, ops.Expression):
+            self = assign.eval(self[item])
         
         # TODO copy
         elif isinstance(assign, Vector):
@@ -331,7 +330,7 @@ class Vector(object):
         return self
 
     def __invert__(self):
-        return ops.complement(self)
+        return ops.Complement(self)
 
     def __str__(self):
         return str(self.vec)

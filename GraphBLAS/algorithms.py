@@ -9,6 +9,7 @@ def bfs(graph, wavefront, parent_list=None):
 
     if parent_list is None:
         parent_list = Vector([0] * graph.shape[1])
+
     a = c.get_algorithm(
             "BFS",
             graph.dtype, 

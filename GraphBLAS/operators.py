@@ -1,6 +1,6 @@
 from contextlib import ContextDecorator
 from collections import namedtuple
-from GraphBLAS import compile_c as c
+from . import compile_c as c
 
 __all__ = [
     "Apply", 
@@ -26,8 +26,6 @@ __all__ = [
 
 accumulator = None
 semiring = None
-
-no_mask = c.utilities().NoMask()
 
 # dictionary of values to build operators
 class OperatorMap(dict):
@@ -65,27 +63,65 @@ identities = OperatorMap({
 })
 
 
-class masked(object):
+class Container(object): pass
 
-    def __init__(self, container, mask, replace_flag):
+# masked object can be accumulated into
+class Masked(object):
+
+    def __init__(self, container, mask=None, replace_flag=False):
+
         self.container = container
-        self.mask = mask
         self.replace_flag = replace_flag
 
+        if mask is None:
+            self.mask = c.utilities().NoMask()
+            self.mtype = (0, None)
+        elif isinstance(mask, Container):
+            self.mask = mask.mat
+            self.mtype = (1, mask.dtype)
+        elif isinstance(mask, Complement):
+            self.mask = mask.mat
+            self.mtype = (2, mask.dtype)
+        else:
+            raise TypeError("Incorrect type for mask parameter")
+
     def __iadd__(self, other):
-        if hasattr(other, "eval"):
+        if isinstance(other, Expression):
             return other.eval(self, accumulator)
         
         else:
             return Identity(other).eval(self, accumulator)
 
 
-class complement(object):
+class Complement(object):
     def __init__(self, container):
         self.mat = ~container.mat
         self.shape = container.shape
         self.dtype = container.dtype
 
+
+class Expression(object):
+
+    def eval(expr, C=None, accum=None):
+
+        # construct new output container first
+        if C is None:
+            out = Masked(expr.out())
+
+        # called by any of C[:], C[0:N], C[M], C[~M]
+        elif isinstance(C, Masked):
+            out = C
+
+        # called by expr.eval(C, accum)
+        elif isinstance(C, Container):
+            out = Masked(C)
+
+        else:
+            raise TypeError("Incorrect type for mask parameter")
+
+        # cpp function call
+        return expr._call_cpp(out, accum)
+ 
 
 class Accumulator(ContextDecorator):
 
@@ -119,16 +155,22 @@ class Apply(object):
         self._modules = dict()
 
     # partially applied
-    class expr(object):
+    class expr(Expression):
         
         def __init__(self, parent, A):
             self.parent = parent
+            self.op = parent.apply_unary_op
             self.A = A
 
-        def _get_module(self, C, M, accum):
+        def _get_module(self, out, accum):
 
             # get module
-            m_args = (self.A.dtype, C.dtype, M, accum)
+            m_args = (
+                    self.A.dtype, 
+                    out.container.dtype, 
+                    out.mtype, 
+                    accum
+            )
 
             try:
                 module = self.parent._modules[m_args]
@@ -142,40 +184,18 @@ class Apply(object):
 
             return module
 
-        def eval(self, C=None, accum=None):
+        def out(self):
+            return self.A._get_out_shape()
 
-            mask = no_mask
-            mtype = (None,)
-            replace_flag = False
-
-            # called by self.eval()
-            if C is None:
-                out = self.A._get_out_shape()
-
-            # called by any of C[:], C[0:N], C[M], C[~M]
-            elif isinstance(C, masked):
-                out = C.container
-                if isinstance(C.mask, complement):
-                    mask = C.mask.mat
-                    mtype = (C.mask.dtype, "~")
-                elif C.mask is not None:
-                    mask = C.mask.mat
-                    mtype = (C.mask.dtype, "")
-                replace_flag = C.replace_flag
-
-            # called by self.eval(C, accum)
-            else: out = C
-
-            # accum is bound at the module level
-            m = self._get_module(out, mtype, accum)
-            # cpp function call
+        def _call_cpp(self, out, accum):
+            m = self._get_module(out, accum)
             m.apply(
-                out.mat,
-                mask,
+                out.container.mat,
+                out.mask,
                 self.A.mat,
-                replace_flag
+                out.replace_flag
             )
-            return out
+            return out.container
 
         def __str__(self):
             return str(self.eval(None, None))
@@ -185,7 +205,7 @@ class Apply(object):
             raise Exception("if accum is defined, expression needs to be evaluated on the spot")
 
         # evaluate A before performing apply
-        if hasattr(A, "eval"): 
+        if isinstance(A, Expression): 
             A = A.eval()
 
         # return partial expression
@@ -213,7 +233,7 @@ class Semiring(ContextDecorator):
         )
         self._modules = dict()
 
-    class expr(object):
+    class expr(Expression):
         
         def __init__(self, parent, op, A, B):
             self.parent = parent
@@ -221,14 +241,14 @@ class Semiring(ContextDecorator):
             self.A = A
             self.B = B
 
-        def _get_module(self, C, M, accum):
+        def _get_module(self, out, accum):
 
             # m_args provide a key to the modules dictionary
             m_args = (
-                    self.A.dtype, 
-                    self.B.dtype, 
-                    C.dtype, 
-                    M,
+                    self.A.dtype,
+                    self.B.dtype,
+                    out.container.dtype,
+                    out.mtype,
                     accum
             )
 
@@ -241,41 +261,20 @@ class Semiring(ContextDecorator):
 
             return module
 
-        def eval(self, C=None, accum=None):
-            
-            mask = no_mask
-            mtype = (None,)
-            replace_flag = False
-
-            # called by self.eval()
-            if C is None:
-                out = self.A._get_out_shape(self.B)
-
-            # called by any of C[:], C[0:N], C[M], C[~M]
-            elif isinstance(C, masked):
-                out = C.container
-                if isinstance(C.mask, complement):
-                    mask = C.mask.mat
-                    mtype = (C.mask.dtype, "~")
-                elif C.mask is not None:
-                    mask = C.mask.mat
-                    mtype = (C.mask.dtype, "")
-                replace_flag = C.replace_flag
-
-            # called by self.eval(C, accum)
-            else: out = C
-
-            # accum is bound at the module level
-            m = self._get_module(out, mtype, accum)
-            # cpp function call
+        def out(self):
+            return self.A._get_out_shape(self.B)
+        
+        def _call_cpp(self, out, accum):
+            m = self._get_module(out, accum)
             getattr(m, self.op)(
-                out.mat,
-                mask,
+                out.container.mat,
+                out.mask,
                 self.A.mat,
                 self.B.mat,
-                replace_flag
+                out.replace_flag
             )
-            return out
+            return out.container
+
 
         def __str__(self):
             return str(self.eval(None, None))
@@ -288,8 +287,8 @@ class Semiring(ContextDecorator):
 
         # if A or B need to be evaluated before continuing
         # TODO pass params into eval
-        if hasattr(A, "eval"): A = A.eval()
-        if hasattr(B, "eval"): B = B.eval()
+        if isinstance(A, Expression): A = A.eval()
+        if isinstance(B, Expression): B = B.eval()
 
         part = Semiring.expr(self, op, A, B)
         if C is not None: return part.eval(C, accum)

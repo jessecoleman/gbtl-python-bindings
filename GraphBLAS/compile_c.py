@@ -83,13 +83,13 @@ def get_apply(op, const, atype, ctype, mtype, accum):
     c_types = {
             "atype": types[atype], 
             "ctype": types[ctype],
-            "mtype": types[mtype[0]]
+            "mtype": types[mtype[1]]
     }
 
     module = (
             "at" + types[atype]
             + "ct" + types[atype]
-            + "mt" + types[mtype[0]]
+            + "mt" + types[mtype[1]]
             + "ap" + op
             + "const" + str(const).replace(".","")
             + "ac" + str(accum)
@@ -114,28 +114,23 @@ def get_apply(op, const, atype, ctype, mtype, accum):
         args["accum_binaryop"] = accum
         args["no_accum"] = 0
 
-    if mtype[0] is None:
-        args["mask"] = 0
-    elif mtype[1] == "":
-        args["mask"] = 1
-    elif mtype[1] == "~":
-        args["mask"] = 2
+    args["mask"] = mtype[1]
 
     return _get_module("apply", module, **args)
 
 def get_semiring(semiring, atype, btype, ctype, mtype, accum):
-    # TODO accept ctype if accumulation is set
+
     c_types = {
             "atype": types[atype],
             "btype": types[btype],
             "ctype": types[ctype],
-            "mtype": types[mtype[0]]
+            "mtype": types[mtype[1]]
     }
     module = (
             "at" + types[atype]
             + "bt" + types[btype]
             + "ct" + types[ctype]
-            + "mt" + types[mtype[0]]
+            + "mt" + types[mtype[1]]
             + "sr" + str(semiring)
             + "ac" + str(accum)
     )
@@ -158,12 +153,7 @@ def get_semiring(semiring, atype, btype, ctype, mtype, accum):
     else:
         args["min_identity"] = 0
 
-    if mtype[0] is None:
-        args["mask"] = 0
-    elif mtype[1] == "":
-        args["mask"] = 1
-    elif mtype[1] == "~":
-        args["mask"] = 2
+    args["mask"] = mtype[0]
 
     return _get_module("operators", module, **args)
 
