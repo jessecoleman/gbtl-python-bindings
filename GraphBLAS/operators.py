@@ -1,6 +1,7 @@
 from contextlib import ContextDecorator
 from collections import namedtuple
 from . import compile_c as c
+from . import utilities as util
 
 __all__ = [
     "Apply", 
@@ -23,9 +24,6 @@ __all__ = [
     "binary_ops", 
     "identities"
 ]
-
-accumulator = None
-semiring = None
 
 # dictionary of values to build operators
 class OperatorMap(dict):
@@ -63,66 +61,6 @@ identities = OperatorMap({
 })
 
 
-class Container(object): pass
-
-# masked object can be accumulated into
-class Masked(object):
-
-    def __init__(self, container, mask=None, replace_flag=False):
-
-        self.container = container
-        self.replace_flag = replace_flag
-
-        if mask is None:
-            self.mask = c.utilities().NoMask()
-            self.mtype = (0, None)
-        elif isinstance(mask, Container):
-            self.mask = mask.mat
-            self.mtype = (1, mask.dtype)
-        elif isinstance(mask, Complement):
-            self.mask = mask.mat
-            self.mtype = (2, mask.dtype)
-        else:
-            raise TypeError("Incorrect type for mask parameter")
-
-    def __iadd__(self, other):
-        if isinstance(other, Expression):
-            return other.eval(self, accumulator)
-        
-        else:
-            return Identity(other).eval(self, accumulator)
-
-
-class Complement(object):
-    def __init__(self, container):
-        self.mat = ~container.mat
-        self.shape = container.shape
-        self.dtype = container.dtype
-
-
-class Expression(object):
-
-    def eval(expr, C=None, accum=None):
-
-        # construct new output container first
-        if C is None:
-            out = Masked(expr.out())
-
-        # called by any of C[:], C[0:N], C[M], C[~M]
-        elif isinstance(C, Masked):
-            out = C
-
-        # called by expr.eval(C, accum)
-        elif isinstance(C, Container):
-            out = Masked(C)
-
-        else:
-            raise TypeError("Incorrect type for mask parameter")
-
-        # cpp function call
-        return expr._call_cpp(out, accum)
- 
-
 class Accumulator(ContextDecorator):
 
     # keep track of accum precedence
@@ -132,14 +70,12 @@ class Accumulator(ContextDecorator):
         self.accum_binary_op = accum_binary_op
 
     def __enter__(self):
-        global accumulator
-        Accumulator.stack.append(accumulator)
-        accumulator = self
+        Accumulator.stack.append(util.accumulator)
+        util.accumulator = self
         return self
 
     def __exit__(self, *errors):
-        global accumulator
-        accumulator = Accumulator.stack.pop()
+        util.accumulator = Accumulator.stack.pop()
         return False
 
     def __str__(self):
@@ -155,7 +91,7 @@ class Apply(object):
         self._modules = dict()
 
     # partially applied
-    class expr(Expression):
+    class expr(util.Expression):
         
         def __init__(self, parent, A):
             self.parent = parent
@@ -205,16 +141,14 @@ class Apply(object):
             raise Exception("if accum is defined, expression needs to be evaluated on the spot")
 
         # evaluate A before performing apply
-        if isinstance(A, Expression): 
+        if isinstance(A, util.Expression): 
             A = A.eval()
 
+        part = Apply.expr(self, A)
         # return partial expression
-        if C is None:
-            return Apply.expr(self, A)
-
+        if C is None: return part
         # return evaluated expression
-        else: 
-            return Apply.expr(self, A).eval(C, accum)
+        else: return part.eval(C, accum)
 
 
 class Semiring(ContextDecorator):
@@ -223,7 +157,6 @@ class Semiring(ContextDecorator):
     stack = []
 
     _ops = namedtuple("_ops", "add_binaryop add_identity mult_binaryop")
-    _modules = dict()
 
     def __init__(self, add_binop, add_idnty, mul_binop):
         self._ops = Semiring._ops(
@@ -233,7 +166,16 @@ class Semiring(ContextDecorator):
         )
         self._modules = dict()
 
-    class expr(Expression):
+    def __enter__(self):
+        Semiring.stack.append(util.semiring)
+        util.semiring = self
+        return self
+
+    def __exit__(self, *errors):
+        util.semring = Semiring.stack.pop()
+        return False
+
+    class expr(util.Expression):
         
         def __init__(self, parent, op, A, B):
             self.parent = parent
@@ -287,8 +229,8 @@ class Semiring(ContextDecorator):
 
         # if A or B need to be evaluated before continuing
         # TODO pass params into eval
-        if isinstance(A, Expression): A = A.eval()
-        if isinstance(B, Expression): B = B.eval()
+        if isinstance(A, util.Expression): A = A.eval()
+        if isinstance(B, util.Expression): B = B.eval()
 
         part = Semiring.expr(self, op, A, B)
         if C is not None: return part.eval(C, accum)
@@ -314,20 +256,11 @@ class Semiring(ContextDecorator):
     def vxm(self, A, B, C=None, accum=None):
         return self.partial("vxm", A, B, C, accum)
 
-    def __enter__(self):
-        global semiring
-        Semiring.stack.append(semiring)
-        semiring = self
-        return self
-
-    def __exit__(self, *errors):
-        global semiring
-        semring = Semiring.stack.pop()
-        return False
-
 
 # default binary operators
 Identity = Apply(unary_ops.identity)
+# TODO figure out better way to inject this
+util.Identity = Identity
 AdditiveInverse = Apply(unary_ops.additive_inverse)
 MultiplicativeInverse = Apply(unary_ops.multiplicative_inverse)
 

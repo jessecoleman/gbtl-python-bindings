@@ -2,8 +2,9 @@ import numpy as np
 from scipy import sparse
 from . import compile_c as c
 from . import operators as ops
+from . import utilities as util
 
-class Matrix(ops.Container):
+class Matrix(util.Container):
 
     def __init__(self, m=None, shape=None, dtype=None):
         # require matrix or shape and type
@@ -53,28 +54,28 @@ class Matrix(ops.Container):
         return str(self.mat)
 
     def __add__(self, other):
-        return ops.semiring.eWiseAdd(self, other)
+        return util.semiring.eWiseAdd(self, other)
 
     def __radd__(self, other):
-        return ops.semring.eWiseAdd(other, self)
+        return util.semring.eWiseAdd(other, self)
 
     def __mul__(self, other):
-        return ops.semiring.eWiseMult(self, other) 
+        return util.semiring.eWiseMult(self, other) 
 
     def __rmul__(self, other):
-        return ops.semiring.eWiseMult(other, self) 
+        return util.semiring.eWiseMult(other, self) 
 
     def __matmul__(self, other):
         if isinstance(other, Matrix):
-            return ops.semiring.mxm(self, other)
+            return util.semiring.mxm(self, other)
         elif isinstance(other, Vector):
-            return ops.semiring.mxv(self, other)
+            return util.semiring.mxv(self, other)
 
     def __rmatmul__(self, other):
         if isinstance(other, Matrix):
-            return ops.semiring.mxm(other, self)
+            return util.semiring.mxm(other, self)
         elif isinstance(other, Vector):
-            return ops.semiring.vxm(other, self)
+            return util.semiring.vxm(other, self)
 
     def __iadd__(self, expr):
         raise Exception("use Matrix[:] notation to assign into matrix")
@@ -117,7 +118,7 @@ class Matrix(ops.Container):
                     if self.mat.hasElement(*item):
                         return self.mat.extractElement(*item)
                     else:
-                        return ops.semiring.add_identity
+                        return util.semiring.add_identity
                     item = None
 
                 elif isinstance(item[1], bool):
@@ -129,7 +130,7 @@ class Matrix(ops.Container):
         elif isinstance(item, Matrix):
             mask = item
 
-        elif isinstance(item, ops.Complement):
+        elif isinstance(item, util.Complement):
             mask = item
 
         elif item == slice(None, None, None):
@@ -138,7 +139,7 @@ class Matrix(ops.Container):
         elif item is not None:
             raise TypeError("Mask must be boolean Matrix or 2D slice with optional replace flag")
 
-        return ops.Masked(self, mask, replace_flag)
+        return util.Masked(self, mask, replace_flag)
 
     # NOTE if accum is expected, that gets handled in semiring or assign partial expression
     # self[item] = assign
@@ -162,7 +163,7 @@ class Matrix(ops.Container):
 
     # TODO double check that ~ copies instead of referencing
     def __invert__(self):
-        return ops.Complement(self)
+        return util.Complement(self)
 
     @property
     def nvals(self):
@@ -170,7 +171,7 @@ class Matrix(ops.Container):
 
     @property
     def T(self):
-        return self.mat.T()
+        return util.Transpose(self)
 
     # returns a new container with the correct output dimensions
     def _get_out_shape(self, other=None):
@@ -196,7 +197,7 @@ class Matrix(ops.Container):
             )
 
 
-class Vector(ops.Container):
+class Vector(util.Container):
 
     def __init__(self, v=None, shape=None, dtype=None):
         # require vector or shape and type
@@ -241,24 +242,24 @@ class Vector(ops.Container):
         self.mat = self.vec
 
     def __add__(self, other):
-        return ops.semiring.eWiseAdd(self, other)
+        return util.semiring.eWiseAdd(self, other)
 
     # other = vector, mask, replace
     # other + self
     def __radd__(self, other):
-        return ops.semiring.eWiseAdd(other, self)
+        return util.semiring.eWiseAdd(other, self)
 
     def __mul__(self, other):
-        return ops.semiring.eWiseMult(self, other)
+        return util.semiring.eWiseMult(self, other)
 
     def __rmul__(self, other):
-        return ops.semiring.eWiseMult(other, self)
+        return util.semiring.eWiseMult(other, self)
 
     def __matmul__(self, other):
-        return ops.semiring.vxm(self, other)
+        return util.semiring.vxm(self, other)
 
     def __rmatmul__(self, other):
-        return ops.semiring.mxv(other, self)
+        return util.semiring.mxv(other, self)
 
     def __iadd__(self, expr):
         raise Exception("use Vector[:] notation to assign into vector")
@@ -299,28 +300,31 @@ class Vector(ops.Container):
             if self.vec.hasElement(item):
                 return self.vec.extractElement(item)
             else:
-                return ops.semiring.add_identity
+                return util.semiring.add_identity
 
         elif isinstance(item, Vector):
             mask = item
 
-        elif isinstance(item, ops.Complement):
+        elif isinstance(item, util.Complement):
             mask = item
 
         elif item is not None:
             raise TypeError("Mask must be boolean Matrix or 2D slice with optional replace flag")
 
-        return ops.Masked(self, mask, replace_flag)
+        return util.Masked(self, mask, replace_flag)
 
     def __setitem__(self, item, assign):
 
+        # if vector[1] = int
         if isinstance(assign, int):
             self.vec.setElement(item, assign)
 
-        elif isinstance(assign, ops.Expression):
+        # if vector[:] = expr
+        elif isinstance(assign, util.Expression):
             self = assign.eval(self[item])
         
         # TODO copy
+        # if vector[:] = vector
         elif isinstance(assign, Vector):
             self.vec = assign.vec
 
@@ -330,7 +334,7 @@ class Vector(ops.Container):
         return self
 
     def __invert__(self):
-        return ops.Complement(self)
+        return util.Complement(self)
 
     def __str__(self):
         return str(self.vec)
@@ -341,7 +345,7 @@ class Vector(ops.Container):
 
     @property
     def T(self):
-        return self.vec.T()
+        return util.Transpose(self)
 
     def __len__(self):
         return self.vec.size()
