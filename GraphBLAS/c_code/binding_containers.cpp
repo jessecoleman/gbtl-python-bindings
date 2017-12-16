@@ -8,6 +8,7 @@
 
 #include <graphblas/graphblas.hpp>
 #include <graphblas/ComplementView.hpp>
+#include <graphblas/TransposeView.hpp>
 
 namespace py = pybind11;
 
@@ -22,8 +23,8 @@ typedef DTYPE ScalarT;
 typedef GraphBLAS::Matrix<ScalarT> MatrixT;
 typedef GraphBLAS::Vector<ScalarT> VectorT;
 
-typedef GraphBLAS::MatrixComplementView<MatrixT> MatrixCompT;
-typedef GraphBLAS::VectorComplementView<VectorT> VectorCompT;
+typedef GraphBLAS::MatrixComplementView<MatrixT> MatrixComplementT;
+typedef GraphBLAS::VectorComplementView<VectorT> VectorComplementT;
 
 typedef GraphBLAS::TransposeView<MatrixT> MatrixTransposeT;
 
@@ -45,15 +46,16 @@ std::string print(ContainerT const &c);
 
 MatrixTransposeT transpose(MatrixT const &m);
 
-MatrixCompT matrix_complement(MatrixT const &m);
+MatrixComplementT matrix_complement(MatrixT const &m);
 
-VectorCompT vector_complement(VectorT const &v);
+VectorComplementT vector_complement(VectorT const &v);
 
 std::vector<ScalarT> extract_vector(VectorT const v);
 
 void define_matrix(py::module &m) 
 {
     py::class_<MatrixT>(m, "Matrix")
+        .def(py::init<MatrixT const &>())
         .def("nvals", &MatrixT::nvals)
         .def("nrows", &MatrixT::nrows)
         .def("ncols", &MatrixT::nrows)
@@ -62,13 +64,41 @@ void define_matrix(py::module &m)
         .def("setElement", &MatrixT::setElement)
         .def("T", &transpose)
         .def("__invert__", &matrix_complement, py::is_operator())
-        .def("__str__", &print<MatrixT>, py::is_operator());
+        .def("__str__", &print<MatrixT>, py::is_operator())
+        .def("__eq__", [](const MatrixT &a, const MatrixT &b) {
+                return a == b;
+        }, py::is_operator())
+        .def("__ne__", [](const MatrixT &a, const MatrixT &b) {
+                return a != b;
+        }, py::is_operator());
 
     py::class_<MatrixTransposeT>(m, "MatrixTransposeView")
+        .def("nvals", &MatrixTransposeT::nvals)
+        .def("nrows", &MatrixTransposeT::nrows)
+        .def("ncols", &MatrixTransposeT::nrows)
+        .def("hasElement", &MatrixTransposeT::hasElement)
+        .def("extractElement", &MatrixTransposeT::extractElement)
         .def("__str__", print<MatrixTransposeT>);
+        //.def("__eq__", [](const MatrixTransposeT &a, const MatrixTransposeT &b) {
+        //        return a == b;
+        //}, py::is_operator())
+        //.def("__ne__", [](const MatrixTransposeT &a, const MatrixTransposeT &b) {
+        //        return a != b;
+        //}, py::is_operator());
 
-    py::class_<MatrixCompT>(m, "MatrixComplementView")
-        .def("__str__", &print<MatrixCompT>);
+    py::class_<MatrixComplementT>(m, "MatrixComplementView")
+        .def("nvals", &MatrixComplementT::nvals)
+        .def("nrows", &MatrixComplementT::nrows)
+        .def("ncols", &MatrixComplementT::nrows)
+        .def("hasElement", &MatrixComplementT::hasElement)
+        .def("extractElement", &MatrixComplementT::extractElement)
+        .def("__str__", &print<MatrixComplementT>);
+        //.def("__eq__", [](const MatrixComplementT &a, const MatrixComplementT &b) {
+        //        return a == b;
+        //}, py::is_operator())
+        //.def("__ne__", [](const MatrixComplementT &a, const MatrixComplementT &b) {
+        //        return a != b;
+        //}, py::is_operator());
 
     m.def("init_sparse_matrix", &init_sparse_matrix);
 }
@@ -85,16 +115,26 @@ void define_vector(py::module &m)
         .def("extractElement", &VectorT::extractElement)
         .def("setElement", &VectorT::setElement)
         .def("__invert__", &vector_complement, py::is_operator())
-        .def("__str__", &print<VectorT>, py::is_operator())
-        .def("__eq__", [](const VectorT &a, const VectorT &b) {
-                return a == b;
-        }, py::is_operator())
-        .def("__ne__", [](const VectorT &a, const VectorT &b) {
-                return a != b;
-        }, py::is_operator());
+        .def("__str__", &print<VectorT>, py::is_operator());
+        //.def("__eq__", [](const VectorT &a, const VectorT &b) {
+        //        return a == b;
+        //}, py::is_operator())
+        //.def("__ne__", [](const VectorT &a, const VectorT &b) {
+        //        return a != b;
+        //}, py::is_operator());
 
-    py::class_<VectorCompT>(m, "VectorComplementView")
-        .def("__str__", &print<VectorCompT>);
+    py::class_<VectorComplementT>(m, "VectorComplementView")
+        .def("nvals", &VectorComplementT::nvals)
+        .def("size", &VectorComplementT::size)
+        .def("hasElement", &VectorComplementT::hasElement)
+        .def("extractElement", &VectorComplementT::extractElement)
+        .def("__str__", &print<VectorComplementT>);
+        //.def("__eq__", [](const VectorComplementT &a, const VectorComplementT &b) {
+        //        return a == b;
+        //}, py::is_operator())
+        //.def("__ne__", [](const VectorComplementT &a, const VectorComplementT &b) {
+        //        return a != b;
+        //}, py::is_operator());
 
     m.def("init_sparse_vector", &init_sparse_vector);
 }
@@ -123,10 +163,10 @@ VectorT init_sparse_vector(
     return v;
 }
 
-MatrixCompT matrix_complement(MatrixT const &m) 
+MatrixComplementT matrix_complement(MatrixT const &m) 
 { return GraphBLAS::complement(m); }
 
-VectorCompT vector_complement(VectorT const &v) 
+VectorComplementT vector_complement(VectorT const &v) 
 { return GraphBLAS::complement(v); }
 
 

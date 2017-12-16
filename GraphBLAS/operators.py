@@ -1,7 +1,7 @@
 from contextlib import ContextDecorator
 from collections import namedtuple
+from .boundinnerclass import BoundInnerClass
 from . import compile_c as c
-from . import utilities as util
 
 __all__ = [
     "Apply", 
@@ -24,6 +24,10 @@ __all__ = [
     "binary_ops", 
     "identities"
 ]
+
+accumulator = None
+semiring = None
+
 
 # dictionary of values to build operators
 class OperatorMap(dict):
@@ -61,41 +65,63 @@ identities = OperatorMap({
 })
 
 
+class Expression(object):
+
+    def eval(self, C=None, accum=None):
+
+        if C is None:
+            C = self._out()
+            out = C.masked()
+
+        else:
+            # if C is not masked, mask it with NoMask
+            # TODO check that error is handled correctly here
+            try: 
+                out = C.masked()
+            except: 
+                out = C
+
+        # cpp function call
+        return self._call_cpp(out, accum)
+
+
 class Accumulator(ContextDecorator):
 
     # keep track of accum precedence
     stack = []
 
-    def __init__(self, accum_binary_op):
-        self.accum_binary_op = accum_binary_op
+    def __init__(self, op):
+        self.binaryop = op
 
     def __enter__(self):
-        Accumulator.stack.append(util.accumulator)
-        util.accumulator = self
+        global accumulator
+        Accumulator.stack.append(accumulator)
+        accumulator = self
         return self
 
     def __exit__(self, *errors):
-        util.accumulator = Accumulator.stack.pop()
+        global accumulator
+        accumulator = Accumulator.stack.pop()
         return False
 
     def __str__(self):
-        return self.accum_binary_op
+        return self.binaryop
 
 
 # make sure accum doesn't go out of scope before evaluating expressions
 class Apply(object):
 
-    def __init__(self, apply_op, bound_const=""):
-        self.apply_unary_op = apply_op
+    def __init__(self, op, bound_const=None):
+        self.unaryop = op
         self.bound_const = bound_const  # if operator is binary, bind constant
         self._modules = dict()
 
     # partially applied
-    class expr(util.Expression):
+    @BoundInnerClass
+    class expr(Expression):
         
-        def __init__(self, parent, A):
-            self.parent = parent
-            self.op = parent.apply_unary_op
+        def __init__(self, apply, A):
+            self.apply = apply
             self.A = A
 
         def _get_module(self, out, accum):
@@ -108,20 +134,18 @@ class Apply(object):
                     accum
             )
 
-            try:
-                module = self.parent._modules[m_args]
-            except KeyError:
+            if m_args not in self.apply._modules:
                 module = c.get_apply(
-                        self.parent.apply_unary_op, 
-                        self.parent.bound_const, 
+                        self.apply.unaryop, 
+                        self.apply.bound_const, 
                         *m_args
                 )
-                self.parent._modules[m_args] = module
+                self.apply._modules[m_args] = module
 
-            return module
+            return self.apply._modules[m_args]
 
-        def out(self):
-            return self.A._get_out_shape()
+        def _out(self):
+            return self.A._out_container()
 
         def _call_cpp(self, out, accum):
             m = self._get_module(out, accum)
@@ -137,14 +161,15 @@ class Apply(object):
             return str(self.eval(None, None))
 
     def __call__(self, A, C=None, accum=None):
+
         if C is None and accum is not None:
             raise Exception("if accum is defined, expression needs to be evaluated on the spot")
 
         # evaluate A before performing apply
-        if isinstance(A, util.Expression): 
+        if isinstance(A, Expression): 
             A = A.eval()
 
-        part = Apply.expr(self, A)
+        part = self.expr(A)
         # return partial expression
         if C is None: return part
         # return evaluated expression
@@ -156,29 +181,26 @@ class Semiring(ContextDecorator):
     # keep track of semiring precedence
     stack = []
 
-    _ops = namedtuple("_ops", "add_binaryop add_identity mult_binaryop")
-
     def __init__(self, add_binop, add_idnty, mul_binop):
-        self._ops = Semiring._ops(
-                add_binaryop=add_binop, 
-                add_identity=add_idnty, 
-                mult_binaryop=mul_binop
-        )
+        self._ops = (add_binop, add_idnty, mul_binop)
         self._modules = dict()
 
     def __enter__(self):
-        Semiring.stack.append(util.semiring)
-        util.semiring = self
+        global semiring
+        Semiring.stack.append(semiring)
+        semiring = self
         return self
 
     def __exit__(self, *errors):
-        util.semring = Semiring.stack.pop()
+        global semiring
+        semring = Semiring.stack.pop()
         return False
 
-    class expr(util.Expression):
+    @BoundInnerClass
+    class expr(Expression):
         
-        def __init__(self, parent, op, A, B):
-            self.parent = parent
+        def __init__(self, semiring, op, A, B):
+            self.semiring = semiring
             self.op = op
             self.A = A
             self.B = B
@@ -194,17 +216,15 @@ class Semiring(ContextDecorator):
                     accum
             )
 
-            try:
-                module = self.parent._modules[m_args]
+            if m_args not in self.semiring._modules:
+                module = c.get_semiring(*self.semiring._ops, *m_args)
+                self.semiring._modules[m_args] = module
 
-            except KeyError:
-                module = c.get_semiring(self.parent._ops, *m_args)
-                self.parent._modules[m_args] = module
+            return self.semiring._modules[m_args]
 
-            return module
 
-        def out(self):
-            return self.A._get_out_shape(self.B)
+        def _out(self):
+            return self.A._out_container(self.B)
         
         def _call_cpp(self, out, accum):
             m = self._get_module(out, accum)
@@ -228,13 +248,12 @@ class Semiring(ContextDecorator):
             raise Exception("if accum is defined, expression needs to be evaluated on the spot")
 
         # if A or B need to be evaluated before continuing
-        # TODO pass params into eval
-        if isinstance(A, util.Expression): A = A.eval()
-        if isinstance(B, util.Expression): B = B.eval()
+        if isinstance(A, Expression): A = A.eval()
+        if isinstance(B, Expression): B = B.eval()
 
-        part = Semiring.expr(self, op, A, B)
-        if C is not None: return part.eval(C, accum)
-        else: return part
+        part = self.expr(op, A, B)
+        if C is None: return part
+        else: return part.eval(C, accum)
 
     # mask and replace are configured at evaluation by C param
     # accum is optionally configured at evaluation
@@ -259,21 +278,20 @@ class Semiring(ContextDecorator):
 
 # default binary operators
 Identity = Apply(unary_ops.identity)
-# TODO figure out better way to inject this
-util.Identity = Identity
 AdditiveInverse = Apply(unary_ops.additive_inverse)
 MultiplicativeInverse = Apply(unary_ops.multiplicative_inverse)
+
 
 # default accumulators
 NoAccumulate = Accumulator(None)
 ArithmeticAccumulate = Accumulator(binary_ops.plus)
 BooleanAccumulate = Accumulator(binary_ops.logical_and)
 
+
 # default semirings
 ArithmeticSemiring = Semiring(binary_ops.plus, identities.additive, binary_ops.times)
 LogicalSemiring = Semiring(binary_ops.logical_or, identities.boolean, binary_ops.logical_and)
 MinPlusSemiring = Semiring(binary_ops.minimum, identities.minimum, binary_ops.plus)
-# TODO The following identity only works for unsigned domains
 MaxTimesSemiring = Semiring(binary_ops.maximum, identities.additive, binary_ops.times)
 MinSelect2ndSemiring = Semiring(binary_ops.minimum, identities.minimum, binary_ops.second)
 MaxSelect2ndSemiring = Semiring(binary_ops.maximum, identities.additive, binary_ops.second)

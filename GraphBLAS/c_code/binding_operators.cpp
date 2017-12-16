@@ -7,55 +7,66 @@
 
 namespace py = pybind11;
 
-/* AScalarT: type of first input
- * BScalarT: type of second input
- * CScalarT: type of output
- */
-typedef ATYPE AScalarT;
-typedef BTYPE BScalarT;
-typedef CTYPE CScalarT;
+// left type
+#if defined(A_TRANSPOSE)
+typedef GraphBLAS::MatrixTransposeView<GraphBLAS::Matrix<ATYPE>> AMatrixT;
+typedef GraphBLAS::Vector<ATYPE>                                 UVectorT;
+#elif defined(A_COMPLEMENT)
+typedef GraphBLAS::MatrixComplementView<GraphBLAS::Matrix<ATYPE>> AMatrixT;
+typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<ATYPE>> UVectorT;
+#else
+typedef GraphBLAS::Matrix<ATYPE> AMatrixT;
+typedef GraphBLAS::Vector<ATYPE> UVectorT;
+#endif
 
-// matrix storage type
-typedef GraphBLAS::Matrix<AScalarT> AMatrixT;
-typedef GraphBLAS::Matrix<BScalarT> BMatrixT;
-typedef GraphBLAS::Matrix<CScalarT> CMatrixT;
-// vector storage type
-typedef GraphBLAS::Vector<AScalarT> UVectorT;
-typedef GraphBLAS::Vector<BScalarT> VVectorT;
-typedef GraphBLAS::Vector<CScalarT> WVectorT;
-// mask types
-#if MASK == 0
-typedef GraphBLAS::NoMask MMatrixT;
-typedef GraphBLAS::NoMask MVectorT;
-#elif MASK == 1
+// right type
+#if defined(B_TRANSPOSE)
+typedef GraphBLAS::MatrixTransposeView<GraphBLAS::Matrix<BTYPE>> BMatrixT;
+typedef GraphBLAS::Vector<BTYPE>                                 VVectorT;
+#elif defined(B_COMPLEMENT)
+typedef GraphBLAS::MatrixComplementView<GraphBLAS::Matrix<BTYPE>> BMatrixT;
+typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<BTYPE>> VVectorT;
+#else
+typedef GraphBLAS::Matrix<BTYPE> BMatrixT;
+typedef GraphBLAS::Vector<BTYPE> VVectorT;
+#endif
+
+// out type
+typedef GraphBLAS::Matrix<CTYPE> CMatrixT;
+typedef GraphBLAS::Vector<CTYPE> WVectorT;
+
+// mask type
+#if defined(MASK)
 typedef GraphBLAS::Matrix<MTYPE> MMatrixT;
 typedef GraphBLAS::Vector<MTYPE> MVectorT;
-#elif MASK == 2
+#elif defined(COMPLEMENT)
 typedef GraphBLAS::MatrixComplementView<GraphBLAS::Matrix<MTYPE>> MMatrixT;
 typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<MTYPE>> MVectorT;
+#elif defined(NONE)
+typedef GraphBLAS::NoMask MMatrixT;
+typedef GraphBLAS::NoMask MVectorT;
 #endif
 
-// in case additive identity isn't plain string
-#if MIN_IDENTITY == 1
-#define ADD_IDNTY std::numeric_limits<CScalarT>::max()
+#ifdef MIN_IDENTITY
+#define IDENTITY std::numeric_limits<CTYPE>::max()
 #else
-#define ADD_IDNTY ADD_IDENTITY
+#define IDENTITY ADD_IDENTITY
 #endif
 
-#if NO_ACCUM == 1
-typedef GraphBLAS::ACCUM_BINARYOP AccumT;
+#ifdef NO_ACCUM
+typedef GraphBLAS::NoAccumulate AccumT;
 #else
-typedef GraphBLAS::ACCUM_BINARYOP<CScalarT> AccumT;
+typedef GraphBLAS::ACCUM_BINARYOP<CTYPE> AccumT;
 #endif
 
 // create monoid and semiring from macro
-GEN_GRAPHBLAS_MONOID(Monoid, GraphBLAS::ADD_BINARYOP, ADD_IDNTY)
+GEN_GRAPHBLAS_MONOID(Monoid, GraphBLAS::ADD_BINARYOP, IDENTITY)
 GEN_GRAPHBLAS_SEMIRING(Semiring, Monoid, GraphBLAS::MULT_BINARYOP)
 
-typedef Monoid<CScalarT> MonoidT;
-typedef GraphBLAS::ADD_BINARYOP<AScalarT> AddBinaryOp;
-typedef GraphBLAS::MULT_BINARYOP<AScalarT, BScalarT, CScalarT> MultBinaryOp;
-typedef Semiring<AScalarT, BScalarT, CScalarT> SemiringT;
+typedef Monoid<CTYPE> MonoidT;
+typedef GraphBLAS::ADD_BINARYOP<ATYPE> AddBinaryOp;
+typedef GraphBLAS::MULT_BINARYOP<ATYPE, BTYPE, CTYPE> MultBinaryOp;
+typedef Semiring<ATYPE, BTYPE, CTYPE> SemiringT;
  
 // TODO check order of parameters
 void mxm(

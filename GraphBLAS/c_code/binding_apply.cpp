@@ -7,42 +7,43 @@
 
 namespace py = pybind11;
 
-/* AScalarT: type of first input
- * BScalarT: type of second input
- * CScalarT: type of output
- */
-typedef ATYPE AScalarT;
-typedef CTYPE CScalarT;
+// in type
+#if defined(A_TRANSPOSE)
+typedef GraphBLAS::MatrixTransposeView<GraphBLAS::Matrix<ATYPE>> AMatrixT;
+typedef GraphBLAS::Vector<ATYPE> UVectorT;
+#elif defined(A_COMPLEMENT)
+typedef GraphBLAS::MatrixComplementView<GraphBLAS::Matrix<ATYPE>> AMatrixT;
+typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<ATYPE>> UVectorT;
+#else
+typedef GraphBLAS::Matrix<ATYPE> AMatrixT;
+typedef GraphBLAS::Vector<ATYPE> UVectorT;
 
-// matrix storage type
-typedef GraphBLAS::Matrix<AScalarT> AMatrixT;
-typedef GraphBLAS::Matrix<CScalarT> CMatrixT;
-// vector storage type
-typedef GraphBLAS::Vector<AScalarT> UVectorT;
-typedef GraphBLAS::Vector<CScalarT> WVectorT;
+// out type
+typedef GraphBLAS::Matrix<CTYPE> CMatrixT;
+typedef GraphBLAS::Vector<CTYPE> WVectorT;
 
 // mask types
-#if MASK == 0
-typedef GraphBLAS::NoMask MMatrixT;
-typedef GraphBLAS::NoMask MVectorT;
-#elif MASK == 1
+#if defined(MASK)
 typedef GraphBLAS::Matrix<MTYPE> MMatrixT;
 typedef GraphBLAS::Vector<MTYPE> MVectorT;
-#elif MASK == 2
+#elif defined(COMPLEMENT)
 typedef GraphBLAS::MatrixComplementView<GraphBLAS::Matrix<MTYPE>> MMatrixT;
 typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<MTYPE>> MVectorT;
+#else
+typedef GraphBLAS::NoMask MMatrixT;
+typedef GraphBLAS::NoMask MVectorT;
 #endif
 
-#if NO_ACCUM == 1
-typedef GraphBLAS::ACCUM_BINARYOP AccumT;
+#ifdef NO_ACCUM
+typedef GraphBLAS::NoAccumulate AccumT;
 #else
-typedef GraphBLAS::ACCUM_BINARYOP<CScalarT> AccumT;
+typedef GraphBLAS::ACCUM_BINARYOP<CTYPE> AccumT;
 #endif
 
-#if BOUND_SECOND == 1
-typedef GraphBLAS::BinaryOp_Bind2nd<AScalarT, GraphBLAS::APPLY_OP<AScalarT, CScalarT>> ApplyT;
+#ifdef BOUND_CONST
+typedef GraphBLAS::BinaryOp_Bind2nd<ATYPE, GraphBLAS::APPLY_OP<ATYPE, CTYPE>> ApplyT;
 #else
-typedef GraphBLAS::APPLY_OP<AScalarT, CScalarT> ApplyT;
+typedef GraphBLAS::APPLY_OP<ATYPE, CTYPE> ApplyT;
 #endif
 
 template <typename MMatrixT>

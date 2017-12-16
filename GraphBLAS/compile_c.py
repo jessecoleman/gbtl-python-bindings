@@ -30,170 +30,6 @@ types = OrderedDict([
         (np.float64, "double")
 ])
 
-# get module directory
-_CWD = inspect.getfile(inspect.currentframe()).rsplit("/", 1)[0]
-sys.path.append(_CWD)
-_MODDIR = os.path.abspath(_CWD + "/lib")
-
-# get environment variables
-_PYBIND = (
-        subprocess.check_output(["python3", "-m", "pybind11", "--includes"])
-        .decode("ascii").strip().split(" ")
-)
-
-_PYEXT = (
-        subprocess.check_output(["python3-config", "--extension-suffix"])
-        .decode("ascii").strip()
-)
-
-# upcast ctype to largest of atype and btype
-def upcast(atype, btype):
-    py_types = list(types.keys())
-    return list(types.items())[max(
-            py_types.index(atype), 
-            py_types.index(btype)
-    )][0]
-
-def utilities():
-    module = "utilities"
-    module = hashlib.sha1(module.encode("utf-8")).hexdigest()
-    return _get_module("utilities", module)
-
-def get_container(atype):
-    module = "at" + types[atype]
-    module = hashlib.sha1(module.encode("utf-8")).hexdigest()
-    args = {"atype": types[atype]}
-    return _get_module("container", module, **args)
-
-def get_algorithm(algorithm, *type):
-
-    c_types = OrderedDict(
-            [(chr(ord('a')+i) + "type", types[t]) for i, t in enumerate(type)]
-    )
-
-    module = "".join([k[:2] + v for k, v in c_types.items()]) + "al" + algorithm
-    module = hashlib.sha1(module.encode("utf-8")).hexdigest()
-
-    args = c_types
-    args["alg"] = algorithm
-    return _get_module("algorithm", module, **args)
-
-def get_apply(op, const, atype, ctype, mtype, accum):
-
-    c_types = {
-            "atype": types[atype], 
-            "ctype": types[ctype],
-            "mtype": types[mtype[1]]
-    }
-
-    module = (
-            "at" + types[atype]
-            + "ct" + types[atype]
-            + "mt" + types[mtype[1]]
-            + "ap" + op
-            + "const" + str(const).replace(".","")
-            + "ac" + str(accum)
-    )
-    # generate unique module name from compiler parameters
-    module = hashlib.sha1(module.encode("utf-8")).hexdigest()
-
-    args = c_types
-    args["apply_op"] = op
-    # if converting binary op to unary op
-    if const == "":
-        args["bound_second"] = 0
-    else: 
-        args["bound_second"] = 1
-        args["bound_const"] = const
-
-    # set default accumulate operator 
-    if accum is None:
-        args["accum_binaryop"] = "NoAccumulate"
-        args["no_accum"] = 1 
-    else: 
-        args["accum_binaryop"] = accum
-        args["no_accum"] = 0
-
-    args["mask"] = mtype[1]
-
-    return _get_module("apply", module, **args)
-
-def get_semiring(semiring, atype, btype, ctype, mtype, accum):
-
-    c_types = {
-            "atype": types[atype],
-            "btype": types[btype],
-            "ctype": types[ctype],
-            "mtype": types[mtype[1]]
-    }
-    module = (
-            "at" + types[atype]
-            + "bt" + types[btype]
-            + "ct" + types[ctype]
-            + "mt" + types[mtype[1]]
-            + "sr" + str(semiring)
-            + "ac" + str(accum)
-    )
-    # generate unique module name from compiler parameters
-    module = hashlib.sha1(module.encode("utf-8")).hexdigest()
-
-    args = semiring._asdict()
-    args.update(c_types)
-    # set default accumulate operator 
-    if accum is None:
-        args["accum_binaryop"] = "NoAccumulate"
-        args["no_accum"] = 1
-    else: 
-        args["accum_binaryop"] = accum
-        args["no_accum"] = 0
-
-    # set default min identity
-    if semiring.add_identity == "MinIdentity":
-        args["min_identity"] = 1 
-    else:
-        args["min_identity"] = 0
-
-    args["mask"] = mtype[0]
-
-    return _get_module("operators", module, **args)
-
-def _get_module(target, module, **kwargs):
-    # first look in dictionary
-    try:
-        return gb[module]
-    except KeyError:
-        # then check directory
-        try:
-            gb[module] = importlib.import_module("GraphBLAS.lib." + module)
-            return gb[module]
-        # finally build and return module
-        except ImportError:
-            return _build_module(target, module, **kwargs)
-
-#def _build_module(target, module, dtype, alg, semiring, accum):
-def _build_module(target, module, **kwargs):
-    # create directory for modules
-    if not os.path.exists(_MODDIR):
-        os.makedirs(_MODDIR)
-
-    FNULL = open(os.devnull, "w")
-    cmd = [
-            "make", 
-            target, 
-            "MODULE="  + module,
-            "PYBIND1=" + _PYBIND[0],
-            "PYBIND2=" + _PYBIND[1],
-            "PYBIND3=" + _PYBIND[2],
-            "PYEXT="   + _PYEXT,
-            "DIR="     + _MODDIR + "/"
-    ]
-    cmd += [arg.upper() + "=" + str(val) for arg, val in kwargs.items()]
-    subprocess.call(cmd, cwd=_MODDIR)#, stdout=FNULL)
-
-    # cache module for future access
-    gb[module] = importlib.import_module("lib.%s" % module)
-    return gb[module]
-       
 def get_type(container):
     # if a is a numpy/scipy array
     try: return container.dtype.type
@@ -203,3 +39,171 @@ def get_type(container):
         while type(container) not in types: 
             container = container[0]
         return type(container)
+
+# upcast ctype to largest of atype and btype
+def upcast(atype, btype):
+    py_types = list(types.keys())
+    return list(types.items())[max(
+            py_types.index(atype), 
+            py_types.index(btype)
+    )][0]
+
+def no_mask():
+    args = {"module": hashlib.sha1("nomask".encode("utf-8")).hexdigest()}
+    return get_module("nomask", args).NoMask()
+
+def utilities():
+    args = {"module": hashlib.sha1("utilities".encode("utf-8")).hexdigest()}
+    return get_module("utilities", args)
+
+def get_container(dtype):
+    args = {"dtype": types[dtype]}
+    args["module"] = hashlib.sha1(str(args).encode("utf-8")).hexdigest()
+    return get_module("containers", args)
+
+def get_algorithm(algorithm, *type):
+    args = OrderedDict([
+        (chr(ord('a')+i) + "type", types[t]) for i, t in enumerate(type)
+    ])
+    args["alg"] = algorithm
+    args["module"] = hashlib.sha1(str(args).encode("utf-8")).hexdigest()
+    return get_module("algorithms", args)
+
+def get_apply(op, const, atype, ctype, mtype, accum):
+
+    args = OrderedDict([
+            ("atype", types[atype]),
+            ("ctype", types[ctype]),
+            ("mtype", types[mtype[0]]),
+            (mtype[1], 1),
+            ("apply_op", op),
+    ])
+
+    # if converting binary op to unary op
+    if const is not None: 
+        args["bound_const"] = const
+
+    # set default accumulate operator 
+    if accum is not None:
+        args["accum_binaryop"] = accum
+    else: 
+        args["no_accum"] = 1
+
+    # generate unique module name from compiler parameters
+    args["module"] = hashlib.sha1(str(args).encode("utf-8")).hexdigest()
+
+    return get_module("apply", args)
+
+def get_semiring(
+        add_binaryop, 
+        add_identity, 
+        mult_binaryop, 
+        atype, 
+        btype, 
+        ctype, 
+        mtype, 
+        accum):
+
+    args = OrderedDict([
+            ("atype", types[atype]),
+            ("btype", types[btype]),
+            ("ctype", types[ctype]),
+            ("mtype", types[mtype[0]]),
+            (mtype[1], 1),
+            ("add_binaryop", add_binaryop),
+            ("add_identity", add_identity),
+            ("mult_binaryop", mult_binaryop)
+    ])
+
+    # set default accumulate operator 
+    if accum is not None:
+        args["accum_binaryop"] = accum
+    else: 
+        args["no_accum"] = 1
+
+    # set default min identity
+    if add_identity == "MinIdentity":
+        args["min_identity"] = 1 
+
+    # generate unique module name from macro parameters
+    args["module"] = hashlib.sha1(str(args).encode("utf-8")).hexdigest()
+    return get_module("operators", args)
+
+def get_module(target, args):
+
+    module = args["module"]
+    if module not in gb:
+        try:
+            gb[module] = importlib.import_module(
+                    "GraphBLAS.modules.{mod}".format(mod=module)
+            )
+        except ImportError:
+            print(module)
+            gb[module] = build_module(target, module, args)
+
+    return gb[module]
+
+
+# compiler flags
+CXX         = "g++"
+LANG	    = "-std=c++14"
+OPTS	    = "-O3 -march=native -DNDEBUG -shared -fPIC -fvisibility=hidden"
+PICKY	    = "-Wall"
+DEBUG 	    = "-g"
+FLAGS       = "-DHAVE_CONFIG_H -DGB_USE_SEQUENTIAL"
+GB_SOURCE   = "/home/jessecoleman/graphpack/gbtl/src"
+
+# project directories
+CWD         = inspect.getfile(inspect.currentframe()).rsplit("/", 1)[0]
+MODULES     = os.path.abspath("{cwd}/modules".format(cwd=CWD))
+C_CODE      = os.path.abspath("{cwd}/c_code".format(cwd=CWD))
+sys.path.append(CWD)
+
+# get environment variables
+PYBIND      = (
+        subprocess.check_output(["python3", "-m", "pybind11", "--includes"])
+        .decode("ascii").strip()
+)
+# get file extension for modules
+PYEXT       = (
+        subprocess.check_output(["python3-config", "--extension-suffix"])
+        .decode("ascii").strip()
+)
+
+def build_module(target, module, args):
+
+    if not os.path.exists(MODULES):
+        os.makedirs(MODULES)
+
+    cmd = [
+            CXX,
+            LANG,
+            *OPTS.split(),
+            *FLAGS.split(),
+            *PYBIND.split(),
+            #PICKY, DEBUG,
+            "-I{dir}".format(dir=C_CODE),
+            "-I{gb_source}".format(gb_source=GB_SOURCE),
+            "-MT", "graphblas{pyext}".format(pyext=PYEXT),
+            "-MD", "-MP", "-MF",
+            "{dir}/.deps/binding.Tpo".format(dir=C_CODE),
+            "{dir}/binding_{target}.cpp".format(dir=C_CODE, target=target),
+            "-o", "{dir}/{mod}{pyext}".format(
+                dir=MODULES, 
+                mod=module, 
+                pyext=PYEXT
+            ),
+            *("-D{arg}={val}".format(
+                arg=str(arg).upper(), val=str(val)) 
+                for arg, val in args.items()
+            )
+    ]
+    #print(cmd)
+    subprocess.call(cmd, cwd=C_CODE)
+
+    return importlib.import_module(
+            "GraphBLAS.modules.{mod}".format(mod=module)
+    )
+
+
+       
