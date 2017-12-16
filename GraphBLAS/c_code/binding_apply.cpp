@@ -17,6 +17,7 @@ typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<ATYPE>> UVectorT;
 #else
 typedef GraphBLAS::Matrix<ATYPE> AMatrixT;
 typedef GraphBLAS::Vector<ATYPE> UVectorT;
+#endif
 
 // out type
 typedef GraphBLAS::Matrix<CTYPE> CMatrixT;
@@ -43,6 +44,7 @@ typedef GraphBLAS::ACCUM_BINARYOP<CTYPE> AccumT;
 #ifdef BOUND_CONST
 typedef GraphBLAS::BinaryOp_Bind2nd<ATYPE, GraphBLAS::APPLY_OP<ATYPE, CTYPE>> ApplyT;
 #else
+#define BOUND_CONST
 typedef GraphBLAS::APPLY_OP<ATYPE, CTYPE> ApplyT;
 #endif
 

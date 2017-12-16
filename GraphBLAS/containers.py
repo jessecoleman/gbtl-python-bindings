@@ -50,10 +50,16 @@ class Matrix(object):
             )
 
     def __eq__(self, other):
-        return self.mat == other.mat
+        if isinstance(other, Matrix):
+            return self.mat == other.mat
+        else:
+            return False
 
     def __neq__(self, other):
-        return self.mat != other.mat
+        if isinstance(other, Matrix):
+            return self.mat != other.mat
+        else:
+            return False
 
     def __add__(self, other):
         return ops.semiring.eWiseAdd(self, other)
@@ -289,10 +295,16 @@ class Vector(object):
         self.mat = self.vec
 
     def __eq__(self, other):
-        return self.vec == other.vec
+        if isinstance(other, Vector):
+            return self.vec == other.vec
+        else:
+            return False
 
     def __neq__(self, other):
-        return self.vec != other.vec
+        if isinstance(other, Vector):
+            return self.vec != other.vec
+        else:
+            return False
 
     def __add__(self, other):
         return ops.semiring.eWiseAdd(self, other)
@@ -325,7 +337,7 @@ class Vector(object):
             self.replace_flag = replace_flag
 
             if mask is None:
-                self.mask = c.utilities().NoMask()
+                self.mask = c.no_mask()
                 self.mtype = (None, None)
 
             elif isinstance(mask, Vector):

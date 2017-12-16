@@ -9,19 +9,14 @@ namespace py = pybind11;
 typedef unsigned int IndexT;
 typedef GraphBLAS::IndexArrayType IndexArrayT;
 
-// matrix dtype
-typedef ATYPE AScalarT;
-typedef BTYPE BScalarT;
-typedef CTYPE CScalarT;
-
 // matrix storage type
-typedef GraphBLAS::Matrix<AScalarT> AMatrixT;
-typedef GraphBLAS::Matrix<BScalarT> BMatrixT;
-typedef GraphBLAS::Matrix<CScalarT> CMatrixT;
+typedef GraphBLAS::Matrix<ATYPE> AMatrixT;
+typedef GraphBLAS::Matrix<BTYPE> BMatrixT;
+typedef GraphBLAS::Matrix<CTYPE> CMatrixT;
 // vector storage type
-typedef GraphBLAS::Vector<AScalarT> UVectorT;
-typedef GraphBLAS::Vector<BScalarT> VVectorT;
-typedef GraphBLAS::Vector<CScalarT> WVectorT;
+typedef GraphBLAS::Vector<ATYPE> UVectorT;
+typedef GraphBLAS::Vector<BTYPE> VVectorT;
+typedef GraphBLAS::Vector<CTYPE> WVectorT;
 
 #if defined(BFS)
 #include <algorithms/bfs.hpp>
@@ -42,7 +37,7 @@ typedef GraphBLAS::Vector<CScalarT> WVectorT;
 #endif
 
 PYBIND11_MODULE(MODULE, m) {
-#if defined(bfS)
+#if defined(BFS)
     m.def("bfs", &algorithms::bfs<AMatrixT, VVectorT, WVectorT>);
     m.def("bfs_batch", &algorithms::bfs_batch<AMatrixT, BMatrixT, CMatrixT>);
     m.def("bfs_level", &algorithms::bfs_level<AMatrixT, BMatrixT, CMatrixT>);

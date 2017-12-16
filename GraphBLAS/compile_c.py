@@ -1,14 +1,11 @@
-import os
-import sys
-import subprocess
-import importlib
-import inspect
 from collections import OrderedDict
 import hashlib
+import importlib
+import inspect
 import numpy as np
-
-# dictionary of GraphBLAS modules
-gb = dict()
+import os
+import subprocess
+import sys
 
 # mapping from python/numpy types to c types
 # ordered by typecasting heirarchy
@@ -49,15 +46,19 @@ def upcast(atype, btype):
     )][0]
 
 def no_mask():
-    args = {"module": hashlib.sha1("nomask".encode("utf-8")).hexdigest()}
+    args = OrderedDict([
+        ("module", hashlib.sha1("nomask".encode("utf-8")).hexdigest())
+    ])
     return get_module("nomask", args).NoMask()
 
-def utilities():
-    args = {"module": hashlib.sha1("utilities".encode("utf-8")).hexdigest()}
+def get_utilities():
+    args = OrderedDict([
+        ("module", hashlib.sha1("utilities".encode("utf-8")).hexdigest())
+    ])
     return get_module("utilities", args)
 
 def get_container(dtype):
-    args = {"dtype": types[dtype]}
+    args = OrderedDict([("dtype", types[dtype])])
     args["module"] = hashlib.sha1(str(args).encode("utf-8")).hexdigest()
     return get_module("containers", args)
 
@@ -65,7 +66,8 @@ def get_algorithm(algorithm, *type):
     args = OrderedDict([
         (chr(ord('a')+i) + "type", types[t]) for i, t in enumerate(type)
     ])
-    args["alg"] = algorithm
+
+    args[algorithm] = 1
     args["module"] = hashlib.sha1(str(args).encode("utf-8")).hexdigest()
     return get_module("algorithms", args)
 
@@ -85,24 +87,16 @@ def get_apply(op, const, atype, ctype, mtype, accum):
 
     # set default accumulate operator 
     if accum is not None:
-        args["accum_binaryop"] = accum
+        args["accum_binaryop"] = str(accum)
     else: 
         args["no_accum"] = 1
 
     # generate unique module name from compiler parameters
     args["module"] = hashlib.sha1(str(args).encode("utf-8")).hexdigest()
-
     return get_module("apply", args)
 
-def get_semiring(
-        add_binaryop, 
-        add_identity, 
-        mult_binaryop, 
-        atype, 
-        btype, 
-        ctype, 
-        mtype, 
-        accum):
+def get_semiring(add_binaryop, add_identity, mult_binaryop, 
+                 atype, btype, ctype, mtype, accum):
 
     args = OrderedDict([
             ("atype", types[atype]),
@@ -117,7 +111,7 @@ def get_semiring(
 
     # set default accumulate operator 
     if accum is not None:
-        args["accum_binaryop"] = accum
+        args["accum_binaryop"] = str(accum)
     else: 
         args["no_accum"] = 1
 
@@ -129,6 +123,9 @@ def get_semiring(
     args["module"] = hashlib.sha1(str(args).encode("utf-8")).hexdigest()
     return get_module("operators", args)
 
+# dictionary of GraphBLAS modules
+gb = dict()
+
 def get_module(target, args):
 
     module = args["module"]
@@ -138,37 +135,9 @@ def get_module(target, args):
                     "GraphBLAS.modules.{mod}".format(mod=module)
             )
         except ImportError:
-            print(module)
             gb[module] = build_module(target, module, args)
 
     return gb[module]
-
-
-# compiler flags
-CXX         = "g++"
-LANG	    = "-std=c++14"
-OPTS	    = "-O3 -march=native -DNDEBUG -shared -fPIC -fvisibility=hidden"
-PICKY	    = "-Wall"
-DEBUG 	    = "-g"
-FLAGS       = "-DHAVE_CONFIG_H -DGB_USE_SEQUENTIAL"
-GB_SOURCE   = "/home/jessecoleman/graphpack/gbtl/src"
-
-# project directories
-CWD         = inspect.getfile(inspect.currentframe()).rsplit("/", 1)[0]
-MODULES     = os.path.abspath("{cwd}/modules".format(cwd=CWD))
-C_CODE      = os.path.abspath("{cwd}/c_code".format(cwd=CWD))
-sys.path.append(CWD)
-
-# get environment variables
-PYBIND      = (
-        subprocess.check_output(["python3", "-m", "pybind11", "--includes"])
-        .decode("ascii").strip()
-)
-# get file extension for modules
-PYEXT       = (
-        subprocess.check_output(["python3-config", "--extension-suffix"])
-        .decode("ascii").strip()
-)
 
 def build_module(target, module, args):
 
@@ -198,12 +167,36 @@ def build_module(target, module, args):
                 for arg, val in args.items()
             )
     ]
-    #print(cmd)
     subprocess.call(cmd, cwd=C_CODE)
 
     return importlib.import_module(
             "GraphBLAS.modules.{mod}".format(mod=module)
     )
 
+# compiler flags
+CXX         = "g++"
+LANG	    = "-std=c++14"
+OPTS	    = "-O3 -march=native -DNDEBUG -shared -fPIC -fvisibility=hidden"
+PICKY	    = "-Wall"
+DEBUG 	    = "-g"
+FLAGS       = "-DHAVE_CONFIG_H -DGB_USE_SEQUENTIAL"
+GB_SOURCE   = "/home/jessecoleman/graphpack/gbtl/src"
 
-       
+# project directories
+CWD         = inspect.getfile(inspect.currentframe()).rsplit("/", 1)[0]
+MODULES     = os.path.abspath("{cwd}/modules".format(cwd=CWD))
+C_CODE      = os.path.abspath("{cwd}/c_code".format(cwd=CWD))
+sys.path.append(CWD)
+
+# get environment variables
+PYBIND      = (
+        subprocess.check_output(["python3", "-m", "pybind11", "--includes"])
+        .decode("ascii").strip()
+)
+
+# get file extension for modules
+PYEXT       = (
+        subprocess.check_output(["python3-config", "--extension-suffix"])
+        .decode("ascii").strip()
+)
+
