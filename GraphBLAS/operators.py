@@ -71,18 +71,14 @@ class Expression(object):
 
         if C is None:
             C = self._out()
-            out = C.masked()
 
-        else:
-            # if C is not masked, mask it with NoMask
-            # TODO check that error is handled correctly here
-            try: 
-                out = C.masked()
-            except: 
-                out = C
+        # if C is not masked, mask it with NoMask
+        try: out = C.masked()
+        except: out = C
 
         # cpp function call
-        return self._call_cpp(out, accum)
+        m = self._get_module(out, accum)
+        return self._call_cpp(m, out)
 
 
 class Accumulator(ContextDecorator):
@@ -104,7 +100,7 @@ class Accumulator(ContextDecorator):
         accumulator = Accumulator.stack.pop()
         return False
 
-    def __str__(self):
+    def __repr__(self):
         return self.binaryop
 
 
@@ -112,9 +108,9 @@ class Accumulator(ContextDecorator):
 class Apply(object):
 
     def __init__(self, op, bound_const=None):
-        self.unaryop = op
-        self.bound_const = bound_const  # if operator is binary, bind constant
+        self._op = (op, bound_const)
         self._modules = dict()
+
 
     # partially applied
     @BoundInnerClass
@@ -126,38 +122,33 @@ class Apply(object):
 
         def _get_module(self, out, accum):
 
-            # get module
-            m_args = (
-                    self.A.dtype, 
-                    out.container.dtype, 
-                    out.mtype, 
-                    accum
+            mod_params = c.type_params(
+                    self.A,
+                    out.container,
+                    out.mask
             )
 
-            if m_args not in self.apply._modules:
-                module = c.get_apply(
-                        self.apply.unaryop, 
-                        self.apply.bound_const, 
-                        *m_args
-                )
-                self.apply._modules[m_args] = module
+            mod_key = str(accum) + str(mod_params)
 
-            return self.apply._modules[m_args]
+            if mod_key not in self.apply._modules:
+                module = c.get_apply(*self.apply._op, mod_params, accum)
+                self.apply._modules[mod_key] = module
+
+            return self.apply._modules[mod_key]
 
         def _out(self):
             return self.A._out_container()
 
-        def _call_cpp(self, out, accum):
-            m = self._get_module(out, accum)
+        def _call_cpp(self, m, out):
             m.apply(
                 out.container.mat,
-                out.mask,
+                out.mask.mat,
                 self.A.mat,
                 out.replace_flag
             )
             return out.container
 
-        def __str__(self):
+        def __repr__(self):
             return str(self.eval(None, None))
 
     def __call__(self, A, C=None, accum=None):
@@ -165,14 +156,11 @@ class Apply(object):
         if C is None and accum is not None:
             raise Exception("if accum is defined, expression needs to be evaluated on the spot")
 
-        # evaluate A before performing apply
         if isinstance(A, Expression): 
             A = A.eval()
 
         part = self.expr(A)
-        # return partial expression
         if C is None: return part
-        # return evaluated expression
         else: return part.eval(C, accum)
 
 
@@ -208,37 +196,35 @@ class Semiring(ContextDecorator):
         def _get_module(self, out, accum):
 
             # m_args provide a key to the modules dictionary
-            m_args = (
-                    self.A.dtype,
-                    self.B.dtype,
-                    out.container.dtype,
-                    out.mtype,
-                    accum
+            mod_params = c.type_params(
+                    self.A,
+                    self.B,
+                    out.container,
+                    out.mask,
             )
 
-            if m_args not in self.semiring._modules:
-                module = c.get_semiring(*self.semiring._ops, *m_args)
-                self.semiring._modules[m_args] = module
+            mod_key = str(str(p) for p in [self.op, accum, mod_params])
 
-            return self.semiring._modules[m_args]
+            if mod_key not in self.semiring._modules:
+                module = c.get_semiring(*self.semiring._ops, self.op, accum, mod_params)
+                self.semiring._modules[mod_key] = module
 
+            return self.semiring._modules[mod_key]
 
         def _out(self):
             return self.A._out_container(self.B)
         
-        def _call_cpp(self, out, accum):
-            m = self._get_module(out, accum)
+        def _call_cpp(self, m, out):
             getattr(m, self.op)(
                 out.container.mat,
-                out.mask,
+                out.mask.mat,
                 self.A.mat,
                 self.B.mat,
                 out.replace_flag
             )
             return out.container
 
-
-        def __str__(self):
+        def __repr__(self):
             return str(self.eval(None, None))
 
     # TODO decide how to pass accum in
@@ -247,7 +233,6 @@ class Semiring(ContextDecorator):
         if C is None and accum is not None:
             raise Exception("if accum is defined, expression needs to be evaluated on the spot")
 
-        # if A or B need to be evaluated before continuing
         if isinstance(A, Expression): A = A.eval()
         if isinstance(B, Expression): B = B.eval()
 

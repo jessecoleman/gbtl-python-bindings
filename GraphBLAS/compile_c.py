@@ -71,13 +71,21 @@ def get_algorithm(algorithm, *type):
     args["module"] = hashlib.sha1(str(args).encode("utf-8")).hexdigest()
     return get_module("algorithms", args)
 
-def get_apply(op, const, atype, ctype, mtype, accum):
+def type_params(*containers):
+
+    alpha = lambda i: chr(ord('a') + i)
+
+    params = []
+    for i, container in enumerate(containers):
+        params.append((alpha(i) + "type", types[container.dtype]))
+        params.append((alpha(i) + "_" + type(container).__name__, 1))
+
+    return params
+
+def get_apply(op, const, type_params, accum):
 
     args = OrderedDict([
-            ("atype", types[atype]),
-            ("ctype", types[ctype]),
-            ("mtype", types[mtype[0]]),
-            (mtype[1], 1),
+            *type_params,
             ("apply_op", op),
     ])
 
@@ -95,18 +103,16 @@ def get_apply(op, const, atype, ctype, mtype, accum):
     args["module"] = hashlib.sha1(str(args).encode("utf-8")).hexdigest()
     return get_module("apply", args)
 
-def get_semiring(add_binaryop, add_identity, mult_binaryop, 
-                 atype, btype, ctype, mtype, accum):
+def get_semiring(add_binop, add_idnty, mult_binop, op, accum, type_params):
+
+    print(type_params)
 
     args = OrderedDict([
-            ("atype", types[atype]),
-            ("btype", types[btype]),
-            ("ctype", types[ctype]),
-            ("mtype", types[mtype[0]]),
-            (mtype[1], 1),
-            ("add_binaryop", add_binaryop),
-            ("add_identity", add_identity),
-            ("mult_binaryop", mult_binaryop)
+            *type_params,
+            ("add_binaryop", add_binop),
+            ("add_identity", add_idnty),
+            ("mult_binaryop", mult_binop),
+            (op, 1)
     ])
 
     # set default accumulate operator 
@@ -116,7 +122,7 @@ def get_semiring(add_binaryop, add_identity, mult_binaryop,
         args["no_accum"] = 1
 
     # set default min identity
-    if add_identity == "MinIdentity":
+    if add_idnty == "MinIdentity":
         args["min_identity"] = 1 
 
     # generate unique module name from macro parameters
@@ -134,6 +140,7 @@ def get_module(target, args):
             gb[module] = importlib.import_module(
                     "GraphBLAS.modules.{mod}".format(mod=module)
             )
+
         except ImportError:
             gb[module] = build_module(target, module, args)
 
@@ -143,7 +150,7 @@ def build_module(target, module, args):
 
     if not os.path.exists(MODULES):
         os.makedirs(MODULES)
-
+    
     cmd = [
             CXX,
             LANG,
@@ -154,7 +161,7 @@ def build_module(target, module, args):
             "-I{dir}".format(dir=C_CODE),
             "-I{gb_source}".format(gb_source=GB_SOURCE),
             "-MT", "graphblas{pyext}".format(pyext=PYEXT),
-            "-MD", "-MP", "-MF",
+            *"-MD -MP -MF".split(),
             "{dir}/.deps/binding.Tpo".format(dir=C_CODE),
             "{dir}/binding_{target}.cpp".format(dir=C_CODE, target=target),
             "-o", "{dir}/{mod}{pyext}".format(
@@ -167,6 +174,7 @@ def build_module(target, module, args):
                 for arg, val in args.items()
             )
     ]
+    print(cmd)
     subprocess.call(cmd, cwd=C_CODE)
 
     return importlib.import_module(
@@ -190,13 +198,13 @@ sys.path.append(CWD)
 
 # get environment variables
 PYBIND      = (
-        subprocess.check_output(["python3", "-m", "pybind11", "--includes"])
+        subprocess.check_output("python3 -m pybind11 --includes".split())
         .decode("ascii").strip()
 )
 
 # get file extension for modules
 PYEXT       = (
-        subprocess.check_output(["python3-config", "--extension-suffix"])
+        subprocess.check_output("python3-config --extension-suffix".split())
         .decode("ascii").strip()
 )
 

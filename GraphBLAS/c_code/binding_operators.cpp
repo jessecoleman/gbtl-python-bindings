@@ -8,41 +8,50 @@
 namespace py = pybind11;
 
 // left type
-#if defined(A_TRANSPOSE)
-typedef GraphBLAS::MatrixTransposeView<GraphBLAS::Matrix<ATYPE>> AMatrixT;
-typedef GraphBLAS::Vector<ATYPE>                                 UVectorT;
-#elif defined(A_COMPLEMENT)
-typedef GraphBLAS::MatrixComplementView<GraphBLAS::Matrix<ATYPE>> AMatrixT;
-typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<ATYPE>> UVectorT;
-#else
+#if defined(A_MATRIX)
 typedef GraphBLAS::Matrix<ATYPE> AMatrixT;
+#elif defined(A_VECTOR)
 typedef GraphBLAS::Vector<ATYPE> UVectorT;
+#elif defined(A_MATRIXCOMPLEMENT)
+typedef GraphBLAS::MatrixComplementView<GraphBLAS::Matrix<ATYPE>> AMatrixT;
+#elif defined(A_VECTORCOMPLEMENT)
+typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<ATYPE>> UVectorT;
+#elif defined(A_MATRIXTRANSPOSE)
+typedef GraphBLAS::TransposeView<GraphBLAS::Matrix<ATYPE>> AMatrixT;
 #endif
 
 // right type
-#if defined(B_TRANSPOSE)
-typedef GraphBLAS::MatrixTransposeView<GraphBLAS::Matrix<BTYPE>> BMatrixT;
-typedef GraphBLAS::Vector<BTYPE>                                 VVectorT;
-#elif defined(B_COMPLEMENT)
-typedef GraphBLAS::MatrixComplementView<GraphBLAS::Matrix<BTYPE>> BMatrixT;
-typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<BTYPE>> VVectorT;
-#else
+#if defined(B_MATRIX)
 typedef GraphBLAS::Matrix<BTYPE> BMatrixT;
+#elif defined(B_VECTOR)
 typedef GraphBLAS::Vector<BTYPE> VVectorT;
+#elif defined(B_MATRIXCOMPLEMENT)
+typedef GraphBLAS::MatrixComplementView<GraphBLAS::Matrix<BTYPE>> BMatrixT;
+#elif defined(B_VECTORCOMPLEMENT)
+typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<BTYPE>> VVectorT;
+#elif defined(B_MATRIXTRANSPOSE)
+typedef GraphBLAS::TransposeView<GraphBLAS::Matrix<BTYPE>> BMatrixT;
 #endif
 
 // out type
+#if defined(C_MATRIX)
 typedef GraphBLAS::Matrix<CTYPE> CMatrixT;
+#elif defined(C_VECTOR)
 typedef GraphBLAS::Vector<CTYPE> WVectorT;
+#endif
 
 // mask type
-#if defined(MASK)
-typedef GraphBLAS::Matrix<MTYPE> MMatrixT;
-typedef GraphBLAS::Vector<MTYPE> MVectorT;
-#elif defined(COMPLEMENT)
-typedef GraphBLAS::MatrixComplementView<GraphBLAS::Matrix<MTYPE>> MMatrixT;
-typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<MTYPE>> MVectorT;
-#elif defined(NONE)
+#if defined(D_MATRIX)
+typedef GraphBLAS::Matrix<DTYPE> MMatrixT;
+#elif defined(D_VECTOR)
+typedef GraphBLAS::Vector<DTYPE> MVectorT;
+#elif defined(D_MATRIXCOMPLEMENT)
+typedef GraphBLAS::MatrixComplementView<GraphBLAS::Matrix<DTYPE>> MMatrixT;
+#elif defined(D_VECTORCOMPLEMENT)
+typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<DTYPE>> MVectorT;
+#elif defined(D_MATRIXTRANSPOSE)
+typedef GraphBLAS::TransposeView<GraphBLAS::Matrix<BTYPE>> BMatrixT;
+#elif defined(D_NOMASK)
 typedef GraphBLAS::NoMask MMatrixT;
 typedef GraphBLAS::NoMask MVectorT;
 #endif
@@ -68,6 +77,7 @@ typedef GraphBLAS::ADD_BINARYOP<ATYPE> AddBinaryOp;
 typedef GraphBLAS::MULT_BINARYOP<ATYPE, BTYPE, CTYPE> MultBinaryOp;
 typedef Semiring<ATYPE, BTYPE, CTYPE> SemiringT;
  
+#if defined(MXM)
 // TODO check order of parameters
 void mxm(
         CMatrixT &C,
@@ -78,6 +88,7 @@ void mxm(
     )
 { GraphBLAS::mxm(C, mask, AccumT(), SemiringT(), A, B, replace_flag); }
 
+#elif defined(MXV)
 void mxv(
         WVectorT &w,
         MVectorT const &mask,
@@ -87,6 +98,7 @@ void mxv(
     )
 { GraphBLAS::mxv(w, mask, AccumT(), SemiringT(), A, v, replace_flag); }
 
+#elif defined(VXM)
 void vxm(
         WVectorT &w,
         MVectorT const &mask,
@@ -96,6 +108,7 @@ void vxm(
     )
 { GraphBLAS::vxm(w, mask, AccumT(), SemiringT(), u, B, replace_flag); }
 
+#elif defined(EWISEADDMATRIX)
 void eWiseAddMatrix(
         CMatrixT &C,
         MMatrixT const &mask,
@@ -105,6 +118,7 @@ void eWiseAddMatrix(
     ) 
 { GraphBLAS::eWiseAdd(C, mask, AccumT(), AddBinaryOp(), A, B, replace_flag); }
 
+#elif defined(EWISEADDVECTOR)
 void eWiseAddVector(
         WVectorT &w,
         MVectorT const &mask,
@@ -114,6 +128,7 @@ void eWiseAddVector(
     ) 
 { GraphBLAS::eWiseAdd(w, mask, AccumT(), AddBinaryOp(), u, v, replace_flag); }
 
+#elif defined(EWISEMULTMATRIX)
 void eWiseMultMatrix(
         CMatrixT &C,
         MMatrixT const &mask,
@@ -123,6 +138,7 @@ void eWiseMultMatrix(
     ) 
 { GraphBLAS::eWiseMult(C, mask, AccumT(), MultBinaryOp(), A, B, replace_flag); }
 
+#elif defined(EWISEMULTVECTOR)
 void eWiseMultVector(
         WVectorT &w,
         MVectorT const &mask,
@@ -131,8 +147,10 @@ void eWiseMultVector(
         bool replace_flag
     ) 
 { GraphBLAS::eWiseMult(w, mask, AccumT(), MultBinaryOp(), u, v, replace_flag); }
+#endif
 
 PYBIND11_MODULE(MODULE, m) {
+
     py::class_<MonoidT>(m, "Monoid", py::module_local())
         .def(py::init<>())
         .def("identity", &MonoidT::identity);
@@ -143,11 +161,19 @@ PYBIND11_MODULE(MODULE, m) {
         .def("mult", &SemiringT::mult)
         .def("zero", &SemiringT::zero);
 
+#if defined(MXM)
     m.def("mxm", &mxm);
+#elif defined(MXV)
     m.def("mxv", &mxv);
+#elif defined(VXM)
     m.def("vxm", &vxm);
-    m.def("eWiseAdd", &eWiseAddMatrix);
-    m.def("eWiseAdd", &eWiseAddVector);
-    m.def("eWiseMult", &eWiseMultMatrix);
-    m.def("eWiseMult", &eWiseMultVector);
+#elif defined(EWISEADDMATRIX)
+    m.def("eWiseAddMatrix", &eWiseAddMatrix);
+#elif defined(EWISEADDVECTOR)
+    m.def("eWiseAddVector", &eWiseAddVector);
+#elif defined(EWISEMULTMATRIX)
+    m.def("eWiseMultMatrix", &eWiseMultMatrix);
+#elif defined(EWISEMULTVECTOR)
+    m.def("eWiseMultVector", &eWiseMultVector);
+#endif
 }

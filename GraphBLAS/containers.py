@@ -4,8 +4,25 @@ from .boundinnerclass import BoundInnerClass
 from . import compile_c as c
 from . import operators as ops
 
+class Container(object):
 
-class Matrix(object):
+    def __iadd__(self, expr):
+        raise Exception("use {}[:] notation to assign into container".format(type(self)))
+
+    def __add__(self, other):
+        return ops.semiring.eWiseAdd(self, other)
+
+    def __radd__(self, other):
+        return ops.semring.eWiseAdd(other, self)
+
+    def __mul__(self, other):
+        return ops.semiring.eWiseMult(self, other) 
+
+    def __rmul__(self, other):
+        return ops.semiring.eWiseMult(other, self) 
+
+
+class Matrix(Container):
 
     def __init__(self, m=None, shape=None, dtype=None):
         # require matrix or shape and type
@@ -49,6 +66,9 @@ class Matrix(object):
                     [], [], []
             )
 
+    def __repr__(self):
+        return str(self.mat)
+
     def __eq__(self, other):
         if isinstance(other, Matrix):
             return self.mat == other.mat
@@ -61,17 +81,9 @@ class Matrix(object):
         else:
             return False
 
-    def __add__(self, other):
-        return ops.semiring.eWiseAdd(self, other)
-
-    def __radd__(self, other):
-        return ops.semring.eWiseAdd(other, self)
-
-    def __mul__(self, other):
-        return ops.semiring.eWiseMult(self, other) 
-
-    def __rmul__(self, other):
-        return ops.semiring.eWiseMult(other, self) 
+    @property
+    def nvals(self):
+        return self.vec.nvals()
 
     def __matmul__(self, other):
         if isinstance(other, Matrix):
@@ -85,8 +97,13 @@ class Matrix(object):
         elif isinstance(other, Vector):
             return ops.semiring.vxm(other, self)
 
-    def __iadd__(self, expr):
-        raise Exception("use Matrix[:] notation to assign into matrix")
+    @property
+    def T(self):
+        return MatrixTranspose(self)
+
+    def __invert__(self):
+        return MatrixComplement(self)
+
 
     @BoundInnerClass
     class masked(object):
@@ -97,17 +114,10 @@ class Matrix(object):
             self.replace_flag = replace_flag
 
             if mask is None:
-                self.mask = c.no_mask()
-                self.mtype = (None, None)
+                self.mask = NoMask()
 
             elif isinstance(mask, Matrix):
-                self.mask = mask.mat
-                if isinstance(mask, Complement):
-                    self.mtype = (mask.dtype, "complement")
-                elif isintance(mask, Transpose):
-                    self.mtype = (mask.dtype, "transpose")
-                else:
-                    self.mtype = (mask.dtype, "mask")
+                self.mask = mask
 
             else:
                 raise TypeError("Incorrect type for mask parameter")
@@ -122,8 +132,8 @@ class Matrix(object):
     # applies mask stored in item and returns self
     def __getitem__(self, item):
 
-        # index into matrix
-        if all(isinstance(i, int) for i in item):
+        # index accessor
+        if all(isinstance(i, int) for i in item) and len(item) == 2:
             if self.mat.hasElement(*item):
                 return self.mat.extractElement(*item)
             else:
@@ -177,18 +187,14 @@ class Matrix(object):
         return self.masked(mask, replace_flag)
 
     # NOTE if accum is expected, that gets handled in semiring or assign partial expression
-    # self[item] = assign
     def __setitem__(self, item, assign):
 
-        if (isinstance(item, tuple)
-                and all(isinstance(i, int) for i in item)
-                and len(item) == 2):
+        if all(isinstance(i, int) for i in item) and len(item) == 2:
             self.mat.setElement(item, assign)
 
         elif hasattr(assign, "eval"):
             self = assign.eval(self[item])
 
-        # TODO copy constructor
         elif isinstance(assign, Matrix):
             self = Matrix(assign)
 
@@ -196,21 +202,6 @@ class Matrix(object):
             raise TypeError("Matrix can be assigned to with integer indices or masks")
 
         return self
-
-    def __str__(self):
-        return str(self.mat)
-
-    @property
-    def nvals(self):
-        return self.vec.nvals()
-
-    @property
-    def T(self):
-        return MatrixTranspose(self)
-
-    # TODO double check that ~ copies instead of referencing
-    def __invert__(self):
-        return MatrixComplement(self)
 
     # returns a new container with the correct output dimensions
     def _out_container(self, other=None):
@@ -253,7 +244,7 @@ class MatrixComplement(Matrix):
         self.dtype = matrix.dtype
 
 
-class Vector(object):
+class Vector(Container):
 
     def __init__(self, v=None, shape=None, dtype=None):
         # require vector or shape and type
@@ -294,6 +285,9 @@ class Vector(object):
 
         self.mat = self.vec
 
+    def __repr__(self):
+        return str(self.vec)
+
     def __eq__(self, other):
         if isinstance(other, Vector):
             return self.vec == other.vec
@@ -306,17 +300,12 @@ class Vector(object):
         else:
             return False
 
-    def __add__(self, other):
-        return ops.semiring.eWiseAdd(self, other)
+    @property
+    def nvals(self):
+        return self.vec.nvals()
 
-    def __radd__(self, other):
-        return ops.semiring.eWiseAdd(other, self)
-
-    def __mul__(self, other):
-        return ops.semiring.eWiseMult(self, other)
-
-    def __rmul__(self, other):
-        return ops.semiring.eWiseMult(other, self)
+    def __len__(self):
+        return self.vec.size()
 
     def __matmul__(self, other):
         return ops.semiring.vxm(self, other)
@@ -324,8 +313,9 @@ class Vector(object):
     def __rmatmul__(self, other):
         return ops.semiring.mxv(other, self)
 
-    def __iadd__(self, expr):
-        raise Exception("use Vector[:] notation to assign into vector")
+    def __invert__(self):
+        return VectorComplement(self)
+
 
     @BoundInnerClass
     class masked(object):
@@ -337,15 +327,10 @@ class Vector(object):
             self.replace_flag = replace_flag
 
             if mask is None:
-                self.mask = c.no_mask()
-                self.mtype = (None, None)
+                self.mask = NoMask()
 
             elif isinstance(mask, Vector):
-                self.mask = mask.vec
-                if isinstance(mask, VectorComplement):
-                    self.mtype = (mask.dtype, "complement")
-                else:
-                    self.mtype = (mask.dtype, "mask")
+                self.mask = mask
 
             else:
                 raise TypeError("Incorrect type for mask parameter")
@@ -360,6 +345,7 @@ class Vector(object):
 
     def __getitem__(self, item):
 
+        # index accessor
         if isinstance(item, int) and not isinstance(item, bool):
             if self.vec.hasElement(item):
                 return self.vec.extractElement(item)
@@ -423,19 +409,6 @@ class Vector(object):
 
         return self
 
-    def __invert__(self):
-        return VectorComplement(self)
-
-    def __str__(self):
-        return str(self.vec)
-
-    @property
-    def nvals(self):
-        return self.vec.nvals()
-
-    def __len__(self):
-        return self.vec.size()
-
     # returns a new container with the correct output dimensions
     def _out_container(self, other=None):
 
@@ -466,3 +439,9 @@ class VectorComplement(Vector):
         self.shape = vector.shape
         self.dtype = vector.dtype
 
+
+class NoMask(Container):
+
+    def __init__(self):
+        self.mat = c.no_mask()
+        self.dtype = None

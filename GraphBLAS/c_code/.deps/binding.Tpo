@@ -1,5 +1,5 @@
 graphblas.cpython-35m-x86_64-linux-gnu.so: \
- /home/jessecoleman/graphpack/gbtl/gbtl-python-bindings/GraphBLAS/c_code/binding_apply.cpp \
+ /home/jessecoleman/graphpack/gbtl/gbtl-python-bindings/GraphBLAS/c_code/binding_operators.cpp \
  /usr/include/stdc-predef.h \
  /home/jessecoleman/.local/include/python3.5m/pybind11/pybind11.h \
  /home/jessecoleman/.local/include/python3.5m/pybind11/attr.h \
