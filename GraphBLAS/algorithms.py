@@ -12,9 +12,9 @@ def bfs(graph, wavefront, parent_list=None):
 
     a = c.get_algorithm(
             "bfs",
-            graph.dtype, 
-            wavefront.dtype, 
-            parent_list.dtype
+            graph,
+            wavefront,
+            parent_list
     )
     a.bfs(graph.mat, wavefront.vec, parent_list.vec)
     return parent_list

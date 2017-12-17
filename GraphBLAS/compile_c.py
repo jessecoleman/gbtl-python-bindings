@@ -46,34 +46,19 @@ def upcast(atype, btype):
     )][0]
 
 def no_mask():
-    args = OrderedDict([
-        ("module", hashlib.sha1("nomask".encode("utf-8")).hexdigest())
-    ])
-    return get_module("nomask", args).NoMask()
+    return get_module("nomask", []).NoMask()
 
 def get_utilities():
-    args = OrderedDict([
-        ("module", hashlib.sha1("utilities".encode("utf-8")).hexdigest())
-    ])
+    args = [("utilities", 1)]
     return get_module("utilities", args)
 
 def get_container(dtype):
-    args = OrderedDict([("dtype", types[dtype])])
-    args["module"] = hashlib.sha1(str(args).encode("utf-8")).hexdigest()
+    args = [("dtype", types[dtype])]
     return get_module("containers", args)
 
-def get_algorithm(algorithm, *type):
-    args = OrderedDict([
-        (chr(ord('a')+i) + "type", types[t]) for i, t in enumerate(type)
-    ])
-
-    args[algorithm] = 1
-    args["module"] = hashlib.sha1(str(args).encode("utf-8")).hexdigest()
-    return get_module("algorithms", args)
+def alpha(i): return chr(ord('a') + i)
 
 def type_params(*containers):
-
-    alpha = lambda i: chr(ord('a') + i)
 
     params = []
     for i, container in enumerate(containers):
@@ -82,51 +67,43 @@ def type_params(*containers):
 
     return params
 
-def get_apply(op, const, type_params, accum):
+def get_algorithm(algorithm, *containers):
+    args = type_params(*containers)
+    args.append((algorithm, 1))
+    return get_module("algorithms", args)
 
-    args = OrderedDict([
-            *type_params,
-            ("apply_op", op),
-    ])
+def get_apply(op, const, args, accum):
 
-    # if converting binary op to unary op
+    args.append(("apply_op", op))
+
     if const is not None: 
-        args["bound_const"] = const
+        args.append(("bound_const", const))
 
-    # set default accumulate operator 
     if accum is not None:
-        args["accum_binaryop"] = str(accum)
-    else: 
-        args["no_accum"] = 1
+        args.append(("accum_binaryop", str(accum)))
 
-    # generate unique module name from compiler parameters
-    args["module"] = hashlib.sha1(str(args).encode("utf-8")).hexdigest()
+    else: 
+        args.append(("no_accum", 1))
+
     return get_module("apply", args)
 
-def get_semiring(add_binop, add_idnty, mult_binop, op, accum, type_params):
+def get_semiring(add_binop, add_idnty, mult_binop, op, accum, args):
 
-    print(type_params)
-
-    args = OrderedDict([
-            *type_params,
-            ("add_binaryop", add_binop),
-            ("add_identity", add_idnty),
-            ("mult_binaryop", mult_binop),
-            (op, 1)
-    ])
-
-    # set default accumulate operator 
-    if accum is not None:
-        args["accum_binaryop"] = str(accum)
-    else: 
-        args["no_accum"] = 1
+    args.append(("add_binaryop", add_binop))
+    args.append(("add_identity", add_idnty))
+    args.append(("mult_binaryop", mult_binop))
+    args.append((op, 1))
 
     # set default min identity
     if add_idnty == "MinIdentity":
-        args["min_identity"] = 1 
+        args.append(("min_identity", 1))
 
-    # generate unique module name from macro parameters
-    args["module"] = hashlib.sha1(str(args).encode("utf-8")).hexdigest()
+    # set default accumulate operator 
+    if accum is not None:
+        args.append(("accum_binaryop", str(accum)))
+    else: 
+        args.append(("no_accum", 1))
+
     return get_module("operators", args)
 
 # dictionary of GraphBLAS modules
@@ -134,7 +111,7 @@ gb = dict()
 
 def get_module(target, args):
 
-    module = args["module"]
+    module = hashlib.sha1(str(args).encode("utf-8")).hexdigest()
     if module not in gb:
         try:
             gb[module] = importlib.import_module(
@@ -169,9 +146,10 @@ def build_module(target, module, args):
                 mod=module, 
                 pyext=PYEXT
             ),
+            "-DMODULE={}".format(module),
             *("-D{arg}={val}".format(
-                arg=str(arg).upper(), val=str(val)) 
-                for arg, val in args.items()
+                arg=str(arg).upper(), val=str(val))
+                for arg, val in args
             )
     ]
     print(cmd)

@@ -57,7 +57,6 @@ typedef GraphBLAS::APPLY_OP<ATYPE, BTYPE> ApplyT;
 #endif
 
 #if defined(A_MATRIX) || defined(A_MATRIXCOMPLEMENT) || defined(A_MATRIXTRANSPOSE)
-template <typename MMatrixT>
 void applyMatrix(
         CMatrixT &C, 
         MMatrixT const &mask, 
@@ -67,7 +66,6 @@ void applyMatrix(
 { GraphBLAS::apply(C, mask, AccumT(), ApplyT(BOUND_CONST), A, replace_flag); }
 
 #elif defined(A_VECTOR) || defined(A_VECTORCOMPLEMENT)
-template <typename MVectorT>
 void applyVector(
         WVectorT &w, 
         MVectorT const &mask, 
@@ -79,8 +77,8 @@ void applyVector(
 
 PYBIND11_MODULE(MODULE, m) {
 #if defined(A_MATRIX) || defined(A_MATRIXCOMPLEMENT) || defined(A_MATRIXTRANSPOSE)
-    m.def("apply", &applyMatrix<MMatrixT>);
+    m.def("apply", &applyMatrix);
 #elif defined(A_VECTOR) || defined(A_VECTORCOMPLEMENT)
-    m.def("apply", &applyVector<MVectorT>);
+    m.def("apply", &applyVector);
 #endif
 }
