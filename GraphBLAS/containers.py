@@ -4,46 +4,43 @@ from .boundinnerclass import BoundInnerClass
 from . import compile_c as c
 from . import operators as ops
 
-class Container(object):
 
-    def __iadd__(self, expr):
-        raise Exception("use {}[:] notation to assign into container".format(type(self)))
+class Matrix(object):
 
-    def __add__(self, other):
-        return ops.semiring.eWiseAdd(self, other)
-
-    def __radd__(self, other):
-        return ops.semring.eWiseAdd(other, self)
-
-    def __mul__(self, other):
-        return ops.semiring.eWiseMult(self, other) 
-
-    def __rmul__(self, other):
-        return ops.semiring.eWiseMult(other, self) 
-
-
-class Matrix(Container):
-
-    def __init__(self, m=None, shape=None, dtype=None):
+    def __init__(self, m=None, shape=None, dtype=None, copy=True):
         # require matrix or shape and type
         if m is None and (shape is None or dtype is None):
             raise ValueError("Please provide matrix or shape and dtype")
 
-        # get C++ module with declaration for Matrix class
-        if dtype is not None: self.dtype = dtype 
-        else: self.dtype = c.get_type(m)
-        module = c.get_container(self.dtype)
-
         # copy constructor, no compilation needed
         if isinstance(m, Matrix):
-            self.mat = module.Matrix(m.mat)
+
+            self.dtype = m.dtype
+            self.shape = m.shape
+            module = c.get_container(self.dtype)
+
+            if copy == True:
+                self.container = module.Matrix(m.container)
+            else:
+                self.container = m.container
+
+            return
+
+        else:
+            # get C++ module with declaration for Matrix class
+            if dtype is not None: 
+                self.dtype = dtype
+            else: 
+                self.dtype = c.get_type(m)
+
+            module = c.get_container(self.dtype)
 
         # construct from scipy sparse matrix
-        elif (sparse.issparse(m)):
+        if (sparse.issparse(m)):
             d = m.tocoo(copy=False)
             self.shape = d.shape
-            self.mat = module.init_sparse_matrix(
-                    self.shape[0], self.shape[1], 
+            self.container = module.init_sparse_matrix(
+                    self.shape[0], self.shape[1],
                     d.row, d.col, d.data
             )
 
@@ -53,37 +50,53 @@ class Matrix(Container):
             row_idx, col_idx = idx
             if shape is not None: self.shape = shape
             else: self.shape = (max(row_idx) + 1, max(col_idx) + 1)
-            self.mat = module.init_sparse_matrix(
-                    self.shape[0], self.shape[1], 
+            self.container = module.init_sparse_matrix(
+                    self.shape[0], self.shape[1],
                     row_idx, col_idx, data
             )
 
         # construct empty matrix from shape and dtype
         else:
             self.shape = shape
-            self.mat = module.init_sparse_matrix(
+            self.container = module.init_sparse_matrix(
                     self.shape[0], self.shape[1],
                     [], [], []
             )
 
     def __repr__(self):
-        return str(self.mat)
+        #return "<{}x{} {} object with {} values>".format(*self.shape, type(self).__name__, self.nvals)
+        return str(self.container)
 
     def __eq__(self, other):
         if isinstance(other, Matrix):
-            return self.mat == other.mat
+            return self.container == other.container
         else:
             return False
 
     def __neq__(self, other):
         if isinstance(other, Matrix):
-            return self.mat != other.mat
+            return self.container != other.container
         else:
             return False
 
     @property
     def nvals(self):
-        return self.vec.nvals()
+        return self.container.nvals()
+
+    def __iadd__(self, expr):
+        raise Exception("use {}[:] notation to assign into container".format(type(self)))
+
+    def __add__(self, other):
+        return ops.semiring.eWiseAddMatrix(self, other)
+
+    def __radd__(self, other):
+        return ops.semiring.eWiseAddMatrix(other, self)
+
+    def __mul__(self, other):
+        return ops.semiring.eWiseMultMatrix(self, other)
+
+    def __rmul__(self, other):
+        return ops.semiring.eWiseMultMatrix(other, self)
 
     def __matmul__(self, other):
         if isinstance(other, Matrix):
@@ -125,7 +138,7 @@ class Matrix(Container):
         def __iadd__(self, other):
             if isinstance(other, ops.Expression):
                 return other.eval(self, ops.accumulator)
-            
+
             else:
                 return ops.Identity(other).eval(self, ops.accumulator)
 
@@ -134,14 +147,14 @@ class Matrix(Container):
 
         # index accessor
         if all(isinstance(i, int) for i in item) and len(item) == 2:
-            if self.mat.hasElement(*item):
-                return self.mat.extractElement(*item)
+            if self.container.hasElement(*item):
+                return self.container.extractElement(*item)
             else:
                 return ops.semiring.add_identity
 
         mask = None
         replace_flag = False
-    
+
         if isinstance(item, tuple):
             # must be 2 slices and bool
             # self[0:N,0:M,True]
@@ -160,15 +173,15 @@ class Matrix(Container):
                             row_idx.append(i)
                             col_idx.append(j)
                             vals.append(True)
-                
+
                     # build mask from slice data
                     mask = Matrix(
                             (vals,
-                            (row_idx, col_idx)), 
-                            shape=self.shape, 
+                            (row_idx, col_idx)),
+                            shape=self.shape,
                             dtype=bool
                     )
-                
+
                 elif isinstance(item[1], bool):
                     item, replace_flag = item
 
@@ -190,7 +203,7 @@ class Matrix(Container):
     def __setitem__(self, item, assign):
 
         if all(isinstance(i, int) for i in item) and len(item) == 2:
-            self.mat.setElement(item, assign)
+            self.container.setElement(item, assign)
 
         elif hasattr(assign, "eval"):
             self = assign.eval(self[item])
@@ -198,7 +211,7 @@ class Matrix(Container):
         elif isinstance(assign, Matrix):
             self = Matrix(assign)
 
-        else: 
+        else:
             raise TypeError("Matrix can be assigned to with integer indices or masks")
 
         return self
@@ -212,18 +225,18 @@ class Matrix(Container):
                     shape=self.shape,
                     dtype=self.dtype
             )
-            
+
         # output from semiring operation
         ctype = c.upcast(self.dtype, other.dtype)
-        if isinstance(other, Matrix): 
+        if isinstance(other, Matrix):
             return Matrix(
-                    shape=(other.shape[0], self.shape[1]), 
+                    shape=(other.shape[0], self.shape[1]),
                     dtype=ctype
             )
 
-        elif isinstance(other, Vector): 
+        elif isinstance(other, Vector):
             return Vector(
-                    shape=(self.shape[1],), 
+                    shape=(self.shape[1],),
                     dtype=ctype
             )
 
@@ -231,81 +244,118 @@ class Matrix(Container):
 class MatrixTranspose(Matrix):
 
     def __init__(self, matrix):
-        self.mat = matrix.mat.T()
+        self.source = matrix
+        self.container = matrix.container.T()
         self.shape = (matrix.shape[1], matrix.shape[0])
         self.dtype = matrix.dtype
+
+    @property
+    def T(self):
+        return self.source
 
 
 class MatrixComplement(Matrix):
 
     def __init__(self, matrix):
-        self.mat = ~matrix.mat
+        self.source = matrix
+        self.container = ~matrix.container
         self.shape = matrix.shape
         self.dtype = matrix.dtype
 
+    def __invert(self):
+        return self.source
 
-class Vector(Container):
 
-    def __init__(self, v=None, shape=None, dtype=None):
+class Vector(object):
+
+    def __init__(self, v=None, shape=None, dtype=None, copy=True):
         # require vector or shape and type
         if v is None and (shape is None or dtype is None):
             raise ValueError("Please provide vector or shape and dtype")
 
-        # get C++ module with declaration for Matrix class
-        if dtype is not None: self.dtype = dtype 
-        else: self.dtype = c.get_type(v)
-        module = c.get_container(self.dtype)
-
         # copy constructor, no compilation needed
         if isinstance(v, Vector):
-            self.vec = module.Vector(v.vec)
 
-        elif isinstance(v, list):
+            self.dtype = v.dtype
+            self.shape = v.shape
+            module = c.get_container(self.dtype)
+
+            if copy == True:
+                self.container = module.Vector(v.container)
+            else:
+                self.container = v.container
+
+            return
+
+        else:
+            # get C++ module with declaration for Matrix class
+            if dtype is not None: 
+                self.dtype = dtype
+            else: 
+                self.dtype = c.get_type(v)
+
+            module = c.get_container(self.dtype)
+
+
+        if isinstance(v, list):
             self.shape = (len(v),)
-            self.vec = module.Vector(v)
+            self.container = module.Vector(v)
 
         elif isinstance(v, np.ndarray):
             self.shape = v.shape
-            self.vec = module.Vector(self)
+            self.container = module.Vector(self)
 
         # construct from tuple of arrays (data, vals)
         elif isinstance(v, tuple) and len(v) == 2:
             data, idx = v
             if shape is not None: self.shape = shape
             else: self.shape = (max(idx) + 1,)
-            self.vec = module.init_sparse_vector(
+            self.container = module.init_sparse_vector(
                     self.shape[0], idx, data
             )
 
         else:
             self.shape = shape
-            self.vec = module.init_sparse_vector(
+            self.container = module.init_sparse_vector(
                     self.shape[0], [], []
             )
 
-        self.mat = self.vec
-
     def __repr__(self):
-        return str(self.vec)
+        return str(self.container)
 
     def __eq__(self, other):
         if isinstance(other, Vector):
-            return self.vec == other.vec
+            return self.container == other.container
         else:
             return False
 
     def __neq__(self, other):
         if isinstance(other, Vector):
-            return self.vec != other.vec
+            return self.container != other.container
         else:
             return False
 
     @property
     def nvals(self):
-        return self.vec.nvals()
+        return self.container.nvals()
 
     def __len__(self):
-        return self.vec.size()
+        return self.container.size()
+
+    def __iadd__(self, expr):
+        raise Exception("use {}[:] notation to assign into container".format(type(self)))
+
+    def __add__(self, other):
+        return ops.semiring.eWiseAddVector(self, other)
+
+    def __radd__(self, other):
+        return ops.semiring.eWiseAddVector(other, self)
+
+    def __mul__(self, other):
+        return ops.semiring.eWiseMultVector(self, other)
+
+    def __rmul__(self, other):
+        return ops.semiring.eWiseMultVector(other, self)
 
     def __matmul__(self, other):
         return ops.semiring.vxm(self, other)
@@ -339,7 +389,7 @@ class Vector(Container):
 
             if isinstance(other, ops.Expression):
                 return other.eval(self, ops.accumulator)
-            
+
             else:
                 return ops.Identity(other).eval(self, ops.accumulator)
 
@@ -347,14 +397,14 @@ class Vector(Container):
 
         # index accessor
         if isinstance(item, int) and not isinstance(item, bool):
-            if self.vec.hasElement(item):
-                return self.vec.extractElement(item)
+            if self.container.hasElement(item):
+                return self.container.extractElement(item)
             else:
                 return ops.semiring.add_identity
 
         mask = None
         replace_flag = False
-    
+
         if isinstance(item, tuple):
             # self[0:N,True]
             if len(item) == 2 and isinstance(item[1], bool):
@@ -374,14 +424,14 @@ class Vector(Container):
 
             # build mask from slice data
             mask = Vector(
-                    (vals, idx), 
-                    shape=self.shape, 
+                    (vals, idx),
+                    shape=self.shape,
                     dtype=bool
             )
 
         elif isinstance(item, bool):
             replace_flag = item
-       
+
         elif isinstance(item, Vector):
             mask = item
 
@@ -394,12 +444,12 @@ class Vector(Container):
 
         # if vector[1] = int
         if isinstance(assign, int):
-            self.vec.setElement(item, assign)
+            self.container.setElement(item, assign)
 
         # if vector[:] = expr
         elif isinstance(assign, ops.Expression):
             self = assign.eval(self[item])
-        
+
         # call copy constructor
         elif isinstance(assign, Vector):
             self = Vector(assign)
@@ -421,13 +471,13 @@ class Vector(Container):
         ctype = c.upcast(self.dtype, other.dtype)
         if isinstance(other, Matrix):
             return Vector(
-                    shape=(other.shape[0],), 
+                    shape=(other.shape[0],),
                     dtype=ctype
             )
 
-        elif isinstance(other, Vector): 
+        elif isinstance(other, Vector):
             return Vector(
-                    shape=self.shape, 
+                    shape=self.shape,
                     dtype=ctype
             )
 
@@ -435,13 +485,18 @@ class Vector(Container):
 class VectorComplement(Vector):
 
     def __init__(self, vector):
-        self.vec = ~vector.vec
+        self.source = vector
+        self.container = ~vector.container
+        self.container = self.container
         self.shape = vector.shape
         self.dtype = vector.dtype
 
+    def __invert(self):
+        return self.source
 
-class NoMask(Container):
+
+class NoMask(object):
 
     def __init__(self):
-        self.mat = c.no_mask()
+        self.container = c.no_mask()
         self.dtype = None

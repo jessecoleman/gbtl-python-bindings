@@ -1,27 +1,30 @@
+from abc import ABCMeta
 from contextlib import ContextDecorator
-from collections import namedtuple
+from collections import OrderedDict
 from .boundinnerclass import BoundInnerClass
 from . import compile_c as c
 
+cache_flag = False
+
 __all__ = [
-    "Apply", 
-    "Accumulator", 
+    "Apply",
+    "Accumulator",
     "Semiring",
     "BooleanAccumulate",
     "ArithmeticAccumulate",
     "Identity",
     "AdditiveInverse",
     "MultiplicativeInverse",
-    "ArithmeticSemiring", 
-    "MinPlusSemiring", 
-    "MaxTimesSemiring", 
+    "ArithmeticSemiring",
+    "MinPlusSemiring",
+    "MaxTimesSemiring",
     "LogicalSemiring",
-    "MinSelect2ndSemiring", 
+    "MinSelect2ndSemiring",
     "MaxSelect2ndSemiring",
     "MinSelect1stSemiring",
     "MaxSelect1stSemiring",
     "unary_ops",
-    "binary_ops", 
+    "binary_ops",
     "identities"
 ]
 
@@ -65,20 +68,11 @@ identities = OperatorMap({
 })
 
 
-class Expression(object):
-
-    def eval(self, C=None, accum=None):
-
-        if C is None:
-            C = self._out()
-
-        # if C is not masked, mask it with NoMask
-        try: out = C.masked()
-        except: out = C
-
-        # cpp function call
-        m = self._get_module(out, accum)
-        return self._call_cpp(m, out)
+class Expression(object, metaclass=ABCMeta):
+    
+    #@abstractmethod
+    def eval():
+        pass
 
 
 class Accumulator(ContextDecorator):
@@ -87,7 +81,7 @@ class Accumulator(ContextDecorator):
     stack = []
 
     def __init__(self, op):
-        self.binaryop = op
+        self.binary_op = op
 
     def __enter__(self):
         global accumulator
@@ -104,59 +98,56 @@ class Accumulator(ContextDecorator):
         return self.binaryop
 
 
+# default accumulators
+NoAccumulate = Accumulator("NoAccumulate")
+ArithmeticAccumulate = Accumulator(binary_ops.plus)
+BooleanAccumulate = Accumulator(binary_ops.logical_and)
+
+
 # make sure accum doesn't go out of scope before evaluating expressions
 class Apply(object):
 
     def __init__(self, op, bound_const=None):
-        self._op = (op, bound_const)
-        self._modules = dict()
+        self.unary_op = (op, bound_const)
 
 
     # partially applied
     @BoundInnerClass
     class expr(Expression):
-        
+
         def __init__(self, apply, A):
-            self.apply = apply
+            self.unary_op = apply.unary_op
             self.A = A
 
-        def _get_module(self, out, accum):
+        def eval(self, C=None, accum=NoAccumulate):
 
-            mod_params = c.type_params(
-                    self.A,
-                    out.container,
-                    out.mask
+            if C is None:
+                C = self.A._out_container()
+
+            if hasattr(C, "masked"): 
+                out = C.masked()
+
+            else: 
+                out = C
+
+            return c.apply(
+                accum.binary_op,
+                self.unary_op,
+                out.replace_flag,
+                A = self.A,
+                C = out.container,
+                M = out.mask
             )
-
-            mod_key = str(accum) + str(mod_params)
-
-            if mod_key not in self.apply._modules:
-                module = c.get_apply(*self.apply._op, mod_params, accum)
-                self.apply._modules[mod_key] = module
-
-            return self.apply._modules[mod_key]
-
-        def _out(self):
-            return self.A._out_container()
-
-        def _call_cpp(self, m, out):
-            m.apply(
-                out.container.mat,
-                out.mask.mat,
-                self.A.mat,
-                out.replace_flag
-            )
-            return out.container
 
         def __repr__(self):
-            return str(self.eval(None, None))
+            return str(self.eval())
 
     def __call__(self, A, C=None, accum=None):
 
         if C is None and accum is not None:
             raise Exception("if accum is defined, expression needs to be evaluated on the spot")
 
-        if isinstance(A, Expression): 
+        if isinstance(A, Expression):
             A = A.eval()
 
         part = self.expr(A)
@@ -170,8 +161,7 @@ class Semiring(ContextDecorator):
     stack = []
 
     def __init__(self, add_binop, add_idnty, mul_binop):
-        self._ops = (add_binop, add_idnty, mul_binop)
-        self._modules = dict()
+        self.binary_ops = (add_binop, add_idnty, mul_binop)
 
     def __enter__(self):
         global semiring
@@ -186,50 +176,40 @@ class Semiring(ContextDecorator):
 
     @BoundInnerClass
     class expr(Expression):
-        
+
         def __init__(self, semiring, op, A, B):
-            self.semiring = semiring
-            self.op = op
+            self.semiring = semiring.binary_ops
+            self.binary_op = op
             self.A = A
             self.B = B
 
-        def _get_module(self, out, accum):
+        def eval(self, C=None, accum=NoAccumulate):
 
-            # m_args provide a key to the modules dictionary
-            mod_params = c.type_params(
-                    self.A,
-                    self.B,
-                    out.container,
-                    out.mask,
+            if C is None:
+                C = self.A._out_container(self.B)
+
+            # if C is not masked, mask it with NoMask
+            if hasattr(C, "masked"): 
+                out = C.masked()
+            else: 
+                out = C
+
+            return c.semiring(
+                self.binary_op,
+                self.semiring,
+                accum.binary_op,
+                out.replace_flag,
+                A = self.A,
+                B = self.B,
+                C = out.container,
+                M = out.mask
             )
-
-            mod_key = str(str(p) for p in [self.op, accum, mod_params])
-
-            if mod_key not in self.semiring._modules:
-                module = c.get_semiring(*self.semiring._ops, self.op, accum, mod_params)
-                self.semiring._modules[mod_key] = module
-
-            return self.semiring._modules[mod_key]
-
-        def _out(self):
-            return self.A._out_container(self.B)
-        
-        def _call_cpp(self, m, out):
-            getattr(m, self.op)(
-                out.container.mat,
-                out.mask.mat,
-                self.A.mat,
-                self.B.mat,
-                out.replace_flag
-            )
-            return out.container
 
         def __repr__(self):
-            return str(self.eval(None, None))
+            return str(self.eval())
 
-    # TODO decide how to pass accum in
     def partial(self, op, A, B, C, accum):
-        
+
         if C is None and accum is not None:
             raise Exception("if accum is defined, expression needs to be evaluated on the spot")
 
@@ -242,14 +222,20 @@ class Semiring(ContextDecorator):
 
     # mask and replace are configured at evaluation by C param
     # accum is optionally configured at evaluation
-    def eWiseAdd(self, A, B, C=None, accum=None):
-        return self.partial("eWiseAdd", A, B, C, accum)
+    def eWiseAddMatrix(self, A, B, C=None, accum=None):
+        return self.partial("eWiseAddMatrix", A, B, C, accum)
+
+    def eWiseAddVector(self, A, B, C=None, accum=None):
+        return self.partial("eWiseAddVector", A, B, C, accum)
 
     def dot(self, A, B, C=None, accum=None):
         pass
 
-    def eWiseMult(self, A, B, C=None, accum=None):
-        return self.partial("eWiseMult", A, B, C, accum)
+    def eWiseMultMatrix(self, A, B, C=None, accum=None):
+        return self.partial("eWiseMultMatrix", A, B, C, accum)
+
+    def eWiseMultVector(self, A, B, C=None, accum=None):
+        return self.partial("eWiseMultVector", A, B, C, accum)
 
     def mxm(self, A, B, C=None, accum=None):
         return self.partial("mxm", A, B, C, accum)
@@ -265,12 +251,6 @@ class Semiring(ContextDecorator):
 Identity = Apply(unary_ops.identity)
 AdditiveInverse = Apply(unary_ops.additive_inverse)
 MultiplicativeInverse = Apply(unary_ops.multiplicative_inverse)
-
-
-# default accumulators
-NoAccumulate = Accumulator(None)
-ArithmeticAccumulate = Accumulator(binary_ops.plus)
-BooleanAccumulate = Accumulator(binary_ops.logical_and)
 
 
 # default semirings
