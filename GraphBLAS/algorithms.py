@@ -1,4 +1,4 @@
-from GraphBLAS import compile_c as c
+from GraphBLAS import c_functions as c
 from GraphBLAS import Matrix, Vector
 
 def bfs(graph, wavefront, parent_list=None):

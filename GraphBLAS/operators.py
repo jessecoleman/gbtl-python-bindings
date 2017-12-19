@@ -2,7 +2,7 @@ from abc import ABCMeta
 from contextlib import ContextDecorator
 from collections import OrderedDict
 from .boundinnerclass import BoundInnerClass
-from . import compile_c as c
+from . import c_functions as c
 
 cache_flag = False
 

@@ -1,4 +1,4 @@
-from . import compile_c as c
+from . import c_functions as c
 from . import Vector, Matrix
 
 def diagonal(vector):

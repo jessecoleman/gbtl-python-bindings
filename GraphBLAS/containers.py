@@ -1,7 +1,7 @@
 import numpy as np
 from scipy import sparse
 from .boundinnerclass import BoundInnerClass
-from . import compile_c as c
+from . import c_functions as c
 from . import operators as ops
 
 
@@ -23,7 +23,6 @@ class Matrix(object):
                 self.container = module.Matrix(m.container)
             else:
                 self.container = m.container
-
             return
 
         else:
@@ -32,7 +31,6 @@ class Matrix(object):
                 self.dtype = dtype
             else: 
                 self.dtype = c.get_type(m)
-
             module = c.get_container(self.dtype)
 
         # construct from scipy sparse matrix
