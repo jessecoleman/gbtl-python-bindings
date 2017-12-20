@@ -124,7 +124,7 @@ class Cache(dict):
         if isinstance(containers, dict):
             for i, c in containers.items():
                 args.append(i + "_" + type(c).__name__)
-                kwargs.append((i + "type", types[c.dtype]))
+                kwargs.append((i + "_type", types[c.dtype]))
                 f_args[i] = c.container
 
         module = dict.__getitem__(self, (

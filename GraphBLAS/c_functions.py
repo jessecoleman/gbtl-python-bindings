@@ -1,15 +1,17 @@
+from functools import partial
 from .c_modules import module_cache, types
 
 def no_mask():
-    return module_cache["nomask", (), (), ()].NoMask()
+    return module_cache["nomask",[],[],[]].NoMask()
 
 def get_container(dtype):
     kwargs = [("dtype", types[dtype])]
-    return module_cache["containers", (), kwargs, ()]
+    return module_cache["containers", [], kwargs, []]
 
-def get_algorithm(algorithm, **containers):
-    args = [algorithm]
-    return module_cache["algorithms", args, (), containers]
+def algorithm(group, algorithm, **containers):
+    args = [group]
+    module, f_args = module_cache["algorithms", args, [], containers]
+    return partial(getattr(module, algorithm), **f_args)
 
 def apply(op, const, accum, replace, **containers):
 
@@ -31,7 +33,6 @@ def apply(op, const, accum, replace, **containers):
             **f_args,
             replace_flag=replace
     )
-    return containers["C"]
 
 def semiring(operator, semiring, accum, replace, **containers):
 
@@ -60,7 +61,6 @@ def semiring(operator, semiring, accum, replace, **containers):
             **f_args,
             replace_flag=replace
     )
-    return containers["C"]
 
 def get_utilities(args, type=None):
     #if type is None:

@@ -9,35 +9,35 @@ namespace py = pybind11;
 
 // in type
 #if defined(A_MATRIX)
-typedef GraphBLAS::Matrix<ATYPE> AMatrixT;
+typedef GraphBLAS::Matrix<A_TYPE> AMatrixT;
 #elif defined(A_MATRIXCOMPLEMENT)
-typedef GraphBLAS::MatrixComplementView<GraphBLAS::Matrix<ATYPE>> AMatrixT;
+typedef GraphBLAS::MatrixComplementView<GraphBLAS::Matrix<A_TYPE>> AMatrixT;
 #elif defined(A_MATRIXTRANSPOSE)
-typedef GraphBLAS::TransposeView<GraphBLAS::Matrix<ATYPE>> AMatrixT;
+typedef GraphBLAS::TransposeView<GraphBLAS::Matrix<A_TYPE>> AMatrixT;
 #elif defined(A_VECTOR)
-typedef GraphBLAS::Vector<ATYPE> UVectorT;
+typedef GraphBLAS::Vector<A_TYPE> UVectorT;
 #elif defined(A_VECTORCOMPLEMENT)
-typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<ATYPE>> UVectorT;
+typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<A_TYPE>> UVectorT;
 #endif
 
 // out type
 #if defined(C_MATRIX)
-typedef GraphBLAS::Matrix<CTYPE> CMatrixT;
+typedef GraphBLAS::Matrix<C_TYPE> CMatrixT;
 #elif defined(C_VECTOR)
-typedef GraphBLAS::Vector<CTYPE> WVectorT;
+typedef GraphBLAS::Vector<C_TYPE> WVectorT;
 #endif
 
 // mask type
 #if defined(M_MATRIX)
-typedef GraphBLAS::Matrix<MTYPE> MMatrixT;
+typedef GraphBLAS::Matrix<M_TYPE> MMatrixT;
 #elif defined(M_MATRIXCOMPLEMENT)
-typedef GraphBLAS::MatrixComplementView<GraphBLAS::Matrix<MTYPE>> MMatrixT;
+typedef GraphBLAS::MatrixComplementView<GraphBLAS::Matrix<M_TYPE>> MMatrixT;
 #elif defined(M_MATRIXTRANSPOSE)
-typedef GraphBLAS::TransposeView<GraphBLAS::Matrix<MTYPE>> MMatrixT;
+typedef GraphBLAS::TransposeView<GraphBLAS::Matrix<M_TYPE>> MMatrixT;
 #elif defined(M_VECTOR)
-typedef GraphBLAS::Vector<MTYPE> MVectorT;
+typedef GraphBLAS::Vector<M_TYPE> MVectorT;
 #elif defined(M_VECTORCOMPLEMENT)
-typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<MTYPE>> MVectorT;
+typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<M_TYPE>> MVectorT;
 #elif defined(M_NOMASK)
 typedef GraphBLAS::NoMask MMatrixT;
 typedef GraphBLAS::NoMask MVectorT;
@@ -46,14 +46,14 @@ typedef GraphBLAS::NoMask MVectorT;
 #ifdef NO_ACCUM
 typedef GraphBLAS::NoAccumulate AccumT;
 #else
-typedef GraphBLAS::ACCUM_BINARYOP<BTYPE> AccumT;
+typedef GraphBLAS::ACCUM_BINARYOP<B_TYPE> AccumT;
 #endif
 
 #ifdef BOUND_CONST
-typedef GraphBLAS::BinaryOp_Bind2nd<ATYPE, GraphBLAS::APPLY_OP<ATYPE, BTYPE>> ApplyT;
+typedef GraphBLAS::BinaryOp_Bind2nd<A_TYPE, GraphBLAS::APPLY_OP<A_TYPE, B_TYPE>> ApplyT;
 #else
 #define BOUND_CONST
-typedef GraphBLAS::APPLY_OP<ATYPE, BTYPE> ApplyT;
+typedef GraphBLAS::APPLY_OP<A_TYPE, B_TYPE> ApplyT;
 #endif
 
 #if defined(APPLYMATIRX)
@@ -77,8 +77,8 @@ void applyVector(
 
 PYBIND11_MODULE(MODULE, m) {
 #if defined(APPLYMATIRX)
-    m.def("applyMatrix", &applyMatrix);
+    m.def("apply", &applyMatrix);
 #elif defined(APPLYVECTOR)
-    m.def("applyVector", &applyVector);
+    m.def("apply", &applyVector);
 #endif
 }

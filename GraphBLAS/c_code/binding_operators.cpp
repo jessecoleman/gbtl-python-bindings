@@ -10,55 +10,55 @@ using namespace pybind11::literals;
 
 // left type
 #if defined(A_MATRIX)
-typedef GraphBLAS::Matrix<ATYPE> AMatrixT;
+typedef GraphBLAS::Matrix<A_TYPE> AMatrixT;
 #elif defined(A_VECTOR)
-typedef GraphBLAS::Vector<ATYPE> UVectorT;
+typedef GraphBLAS::Vector<A_TYPE> UVectorT;
 #elif defined(A_MATRIXCOMPLEMENT)
-typedef GraphBLAS::MatrixComplementView<GraphBLAS::Matrix<ATYPE>> AMatrixT;
+typedef GraphBLAS::MatrixComplementView<GraphBLAS::Matrix<A_TYPE>> AMatrixT;
 #elif defined(A_VECTORCOMPLEMENT)
-typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<ATYPE>> UVectorT;
+typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<A_TYPE>> UVectorT;
 #elif defined(A_MATRIXTRANSPOSE)
-typedef GraphBLAS::TransposeView<GraphBLAS::Matrix<ATYPE>> AMatrixT;
+typedef GraphBLAS::TransposeView<GraphBLAS::Matrix<A_TYPE>> AMatrixT;
 #endif
 
 // right type
 #if defined(B_MATRIX)
-typedef GraphBLAS::Matrix<BTYPE> BMatrixT;
+typedef GraphBLAS::Matrix<B_TYPE> BMatrixT;
 #elif defined(B_VECTOR)
-typedef GraphBLAS::Vector<BTYPE> VVectorT;
+typedef GraphBLAS::Vector<B_TYPE> VVectorT;
 #elif defined(B_MATRIXCOMPLEMENT)
-typedef GraphBLAS::MatrixComplementView<GraphBLAS::Matrix<BTYPE>> BMatrixT;
+typedef GraphBLAS::MatrixComplementView<GraphBLAS::Matrix<B_TYPE>> BMatrixT;
 #elif defined(B_VECTORCOMPLEMENT)
-typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<BTYPE>> VVectorT;
+typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<B_TYPE>> VVectorT;
 #elif defined(B_MATRIXTRANSPOSE)
-typedef GraphBLAS::TransposeView<GraphBLAS::Matrix<BTYPE>> BMatrixT;
+typedef GraphBLAS::TransposeView<GraphBLAS::Matrix<B_TYPE>> BMatrixT;
 #endif
 
 // out type
 #if defined(C_MATRIX)
-typedef GraphBLAS::Matrix<CTYPE> CMatrixT;
+typedef GraphBLAS::Matrix<C_TYPE> CMatrixT;
 #elif defined(C_VECTOR)
-typedef GraphBLAS::Vector<CTYPE> WVectorT;
+typedef GraphBLAS::Vector<C_TYPE> WVectorT;
 #endif
 
 // mask type
 #if defined(M_MATRIX)
-typedef GraphBLAS::Matrix<MTYPE> MMatrixT;
+typedef GraphBLAS::Matrix<M_TYPE> MMatrixT;
 #elif defined(M_VECTOR)
-typedef GraphBLAS::Vector<MTYPE> MVectorT;
+typedef GraphBLAS::Vector<M_TYPE> MVectorT;
 #elif defined(M_MATRIXCOMPLEMENT)
-typedef GraphBLAS::MatrixComplementView<GraphBLAS::Matrix<MTYPE>> MMatrixT;
+typedef GraphBLAS::MatrixComplementView<GraphBLAS::Matrix<M_TYPE>> MMatrixT;
 #elif defined(M_VECTORCOMPLEMENT)
-typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<MTYPE>> MVectorT;
+typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<M_TYPE>> MVectorT;
 #elif defined(M_MATRIXTRANSPOSE)
-typedef GraphBLAS::TransposeView<GraphBLAS::Matrix<MTYPE>> MMatrixT;
+typedef GraphBLAS::TransposeView<GraphBLAS::Matrix<M_TYPE>> MMatrixT;
 #elif defined(M_NOMASK)
 typedef GraphBLAS::NoMask MMatrixT;
 typedef GraphBLAS::NoMask MVectorT;
 #endif
 
 #ifdef MIN_IDENTITY
-#define IDENTITY std::numeric_limits<CTYPE>::max()
+#define IDENTITY std::numeric_limits<C_TYPE>::max()
 #else
 #define IDENTITY ADD_IDENTITY
 #endif
@@ -66,17 +66,17 @@ typedef GraphBLAS::NoMask MVectorT;
 #ifdef NO_ACCUM
 typedef GraphBLAS::NoAccumulate AccumT;
 #else
-typedef GraphBLAS::ACCUM_BINARYOP<CTYPE> AccumT;
+typedef GraphBLAS::ACCUM_BINARYOP<C_TYPE> AccumT;
 #endif
 
 // create monoid and semiring from macro
 GEN_GRAPHBLAS_MONOID(Monoid, GraphBLAS::ADD_BINARYOP, IDENTITY)
 GEN_GRAPHBLAS_SEMIRING(Semiring, Monoid, GraphBLAS::MULT_BINARYOP)
 
-typedef Monoid<CTYPE> MonoidT;
-typedef GraphBLAS::ADD_BINARYOP<ATYPE> AddBinaryOp;
-typedef GraphBLAS::MULT_BINARYOP<ATYPE, BTYPE, CTYPE> MultBinaryOp;
-typedef Semiring<ATYPE, BTYPE, CTYPE> SemiringT;
+typedef Monoid<C_TYPE> MonoidT;
+typedef GraphBLAS::ADD_BINARYOP<A_TYPE> AddBinaryOp;
+typedef GraphBLAS::MULT_BINARYOP<A_TYPE, B_TYPE, C_TYPE> MultBinaryOp;
+typedef Semiring<A_TYPE, B_TYPE, C_TYPE> SemiringT;
 
 #if defined(MXM)
 // TODO check order of parameters

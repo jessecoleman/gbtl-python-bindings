@@ -130,7 +130,7 @@ class Apply(object):
             else: 
                 out = C
 
-            return c.apply(
+            c.apply(
                 accum.binary_op,
                 self.unary_op,
                 out.replace_flag,
@@ -138,6 +138,8 @@ class Apply(object):
                 C = out.container,
                 M = out.mask
             )
+
+            return out.container
 
         def __repr__(self):
             return str(self.eval())
@@ -194,7 +196,7 @@ class Semiring(ContextDecorator):
             else: 
                 out = C
 
-            return c.semiring(
+            c.semiring(
                 self.binary_op,
                 self.semiring,
                 accum.binary_op,
@@ -204,6 +206,8 @@ class Semiring(ContextDecorator):
                 C = out.container,
                 M = out.mask
             )
+
+            return out.container
 
         def __repr__(self):
             return str(self.eval())

@@ -10,41 +10,106 @@ def bfs(graph, wavefront, parent_list=None):
     if parent_list is None:
         parent_list = Vector([0] * graph.shape[1])
 
-    a = c.get_algorithm(
+    c.algorithm(
+            "bfs_variants",
             "bfs",
-            graph,
-            wavefront,
-            parent_list
+            graph       = graph,
+            wavefront   = wavefront,
+            parent_list = parent_list
+    )()
+    return parent_list
+
+def bfs_batch(graph, wavefronts, parent_list=None):
+    # TODO
+    #if not isinstance(wavefront, Matrix):
+    #    w = [0] * graph.shape[1]
+    #    w[wavefront] = 1
+    #    wavefront = Vector(w)
+
+    if parent_list is None:
+        parent_list = Matrix(shape=graph.shape, dtype=graph.dtype)
+
+    c.algorithm(
+            "bfs_variants",
+            "bfs_batch",
+            graph       = graph,
+            wavefronts  = wavefronts,
+            parent_list = parent_list
     )
-    a.bfs(graph.mat, wavefront.vec, parent_list.vec)
     return parent_list
 
 def maxflow(capacity, source, sink):
     pass
 
 def vertex_in_degree(graph, vid):
-    pass
+    return c.algorithm(
+            "metrics", 
+            "vertex_in_degree", 
+            graph=graph
+    )(vid=vid)
 
 def vertex_out_degree(graph, vid):
-    pass
+    return c.algorithm(
+            "metrics", 
+            "vertex_out_degree", 
+            graph=graph
+    )(vid=vid)
 
 def vertex_degree(graph, vid):
-    pass
 
-def graph_distance(graph, sid, result):
-    pass
+    return c.algorithm(
+            "metrics", 
+            "vertex_degree", 
+            graph=graph
+    )(vid=vid)
 
-def graph_distance_matrix(graph, result):
-    pass
+def graph_distance(graph, sid, result=None):
+
+    if result is None:
+        result = Vector(shape=graph.shape[0], dtype=graph.dtype)
+
+    return c.algorithm(
+            "metrics", 
+            "graph_distance", 
+            graph=graph,
+            result=result,
+    )(sid=sid)
+
+def graph_distance_matrix(graph, result=None):
+
+    if result is None:
+        result = Matrix(shape=graph.shape, dtype=graph.dtype)
+
+    return c.algorithm(
+            "metrics", 
+            "graph_distance", 
+            graph=graph,
+            result=result,
+    )()
 
 def vertex_eccentricity(graph, vid):
-    pass
+
+    return c.algorithm(
+            "metrics",
+            "vertex_eccentricity",
+            graph=graph
+    )(vid=vid)
 
 def graph_radius(graph):
-    pass
+
+    return c.algorithm(
+            "metrics",
+            "graph_radius",
+            graph=graph
+    )()
 
 def graph_diameter(graph):
-    pass
+
+    return c.algorithm(
+            "metrics",
+            "graph_diameter",
+            graph=graph
+    )()
 
 def closeness_centrality(graph, vid):
     pass
