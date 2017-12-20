@@ -2,10 +2,9 @@ from . import c_functions as c
 from . import Vector, Matrix
 
 def diagonal(vector):
-    m = c.get_utilities("diagonal", vector)
     length = vector.shape[0]
     matrix = Matrix(
-            m.diagonal(vector.vec), 
+            c.utilities("diagonal", vector=vector)(), 
             shape=(length, length), 
             dtype=vector.dtype, 
             copy=False
@@ -13,31 +12,32 @@ def diagonal(vector):
     return matrix
 
 def scaled_identity(shape, scalar):
-    m = c.get_utilities(
-            "scaled_identity", 
-            type=[
-                ("a_Matrix", 1), 
-                ("atype", c.types[type(scalar)])
-            ]
-    )
-    matrix = m.scaled_identity(shape, scalar)
-    return matrix
+
+    return c.utilities(
+            function    = "scaled_identity",
+            kwargs      = [("a_type", c.types[type(scalar)])],
+    )(mat_size=shape, val=scalar)
 
 def split(matrix):
-    m = c.get_utilities("split", matrix)
+
     lower = matrix._out_container()
     upper = matrix._out_container()
-    m.split(matrix.mat, lower.mat, upper.mat)
+    c.utilities(
+            "split",
+            A = matrix,
+            L = lower,
+            U = upper
+    )
     return lower, upper
 
 def normalize_rows(matrix):
-    m = c.get_utilities("normalize_rows", matrix)
-    m.normalize_rows(matrix.mat)
+
+    c.utilities("normalize_rows", matrix=matrix)
     return matrix
 
 def normalize_cols(matrix):
-    m = c.get_utilities("normalize_cols", matrix)
-    m.normalize_cols(matrix.mat)
+
+    c.utilities("normalize_cols", matrix=matrix)
     return matrix
 
 # TODO implement dimension checking

@@ -1,23 +1,52 @@
+from collections import OrderedDict
 from functools import partial
-from .c_modules import module_cache, types
+import numpy as np
+from . import c_modules as c_mod
+
+# mapping from python/numpy types to c types
+# ordered by typecasting heirarchy
+types = OrderedDict([
+        (None,      ""),
+        (bool,      "bool"),
+        (np.bool_,  "bool"),
+        (np.int8,   "int8_t"),
+        (np.uint8,  "uint8_t"),
+        (np.int16,  "int16_t"),
+        (np.uint16, "uint16_t"),
+        (np.int32,  "int32_t"),
+        (np.uint32, "uint32_t"),
+        (int,       "int64_t"),
+        (np.int64,  "int64_t"),
+        (np.uint64, "uint64_t"),
+        (np.float32,"float"),
+        (float,     "double"),
+        (np.float64,"double")
+])
+
 
 def no_mask():
-    return module_cache["nomask",[],[],[]].NoMask()
+    return get_function(target = "nomask").NoMask()
 
-def get_container(dtype):
-    kwargs = [("dtype", types[dtype])]
-    return module_cache["containers", [], kwargs, []]
+def container(dtype):
 
-def algorithm(group, algorithm, **containers):
-    args = [group]
-    module, f_args = module_cache["algorithms", args, [], containers]
-    return partial(getattr(module, algorithm), **f_args)
+    return get_function(
+            target = "containers", 
+            kwargs = [("dtype", types[dtype])]
+    )
 
-def apply(op, const, accum, replace, **containers):
+def algorithm(target, algorithm, **containers):
+
+    return get_function(
+            target      = "algorithms",
+            function    = algorithm,
+            args        = [target],
+            containers  = containers
+    )
+
+def apply(op, const, accum, replace_flag, **containers):
 
     args = []
-    kwargs = []
-    kwargs.append(("apply_op", op))
+    kwargs [("apply_op", op)]
 
     if const is not None:
         kwargs.append(("bound_const", const))
@@ -28,23 +57,24 @@ def apply(op, const, accum, replace, **containers):
     else:
         args.append("no_accum")
 
-    module, f_args = module_cache["apply", args, kwargs, containers]
-    module.apply(
-            **f_args,
-            replace_flag=replace
-    )
+    return get_function(
+            target      = "apply", 
+            function    = "apply",
+            args        = args, 
+            kwargs      = kwargs, 
+            containers  = container
+    )(replace_flag=replace_flag)
+    
+def semiring(operator, semiring, accum, replace_flag, **containers):
 
-def semiring(operator, semiring, accum, replace, **containers):
+    args = [operator]
 
     add_binop, add_idnty, mult_binop = semiring
-
     kwargs = [
         ("add_binaryop", add_binop),
         ("add_identity", add_idnty),
         ("mult_binaryop", mult_binop),
     ]
-
-    args = [operator]
 
     # set default min identity
     if add_idnty == "MinIdentity":
@@ -56,19 +86,23 @@ def semiring(operator, semiring, accum, replace, **containers):
     else:
         args.append("no_accum")
 
-    module, f_args = module_cache["operators", args, kwargs, containers]
-    getattr(module, operator)(
-            **f_args,
-            replace_flag=replace
-    )
+    get_function(
+            target      = "operators",
+            function    = operator,
+            args        = args,
+            kwargs      = kwargs,
+            containers  = containers
+    )(replace_flag=replace_flag)
 
-def get_utilities(args, type=None):
-    #if type is None:
-    #    args = type_params(*containers)
-    #else:
-    #    args = type
-    print("getting utilities", args)
-    return get_module("utilities", args)
+def utilities(function, args=None, kwargs=None, **containers):
+
+    return get_function(
+            target      = "utilities", 
+            function    = function,
+            args        = args,
+            kwargs      = kwargs,
+            containers  = containers
+    )
 
 # upcast ctype to largest of atype and btype
 def upcast(atype, btype):
@@ -87,4 +121,25 @@ def get_type(container):
         while type(container) not in types:
             container = container[0]
         return type(container)
+
+def get_function(target, function=None, args=None, kwargs=None, containers=None):
+
+    if args is None: args = []
+    if kwargs is None: kwargs = []
+
+    if isinstance(containers, dict):
+        for i, c in containers.items():
+            args.append(i + "_" + type(c).__name__)
+            kwargs.append((i + "_type", types[c.dtype]))
+
+    module = c_mod.cache[target, args, kwargs]
+
+    # partially apply function with container arguments
+    if function is not None:
+        return partial(
+                getattr(module, function), 
+                **{i: c.container for i, c in containers.items()}
+        )
+
+    else: return module
 

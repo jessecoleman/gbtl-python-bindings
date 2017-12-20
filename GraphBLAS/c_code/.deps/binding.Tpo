@@ -1,5 +1,5 @@
 graphblas.cpython-35m-x86_64-linux-gnu.so: \
- /home/jessecoleman/graphpack/gbtl/gbtl-python-bindings/GraphBLAS/c_code/binding_algorithms.cpp \
+ /home/jessecoleman/graphpack/gbtl/gbtl-python-bindings/GraphBLAS/c_code/binding_operators.cpp \
  /usr/include/stdc-predef.h \
  /home/jessecoleman/.local/include/python3.5m/pybind11/pybind11.h \
  /home/jessecoleman/.local/include/python3.5m/pybind11/attr.h \
@@ -311,11 +311,14 @@ graphblas.cpython-35m-x86_64-linux-gnu.so: \
  /usr/include/c++/5/experimental/optional \
  /usr/include/c++/5/bits/enable_special_members.h \
  /home/jessecoleman/.local/include/python3.5m/pybind11/operators.h \
+ /home/jessecoleman/.local/include/python3.5m/pybind11/numpy.h \
+ /home/jessecoleman/.local/include/python3.5m/pybind11/complex.h \
+ /usr/include/c++/5/complex /usr/include/c++/5/sstream \
+ /usr/include/c++/5/bits/sstream.tcc \
  /home/jessecoleman/graphpack/gbtl/src/graphblas/graphblas.hpp \
  /home/jessecoleman/graphpack/gbtl/src/graphblas/detail/config.hpp \
  /home/jessecoleman/graphpack/gbtl/src/graphblas/types.hpp \
  /home/jessecoleman/graphpack/gbtl/src/graphblas/exceptions.hpp \
- /usr/include/c++/5/sstream /usr/include/c++/5/bits/sstream.tcc \
  /home/jessecoleman/graphpack/gbtl/src/graphblas/detail/logging.h \
  /home/jessecoleman/graphpack/gbtl/src/graphblas/algebra.hpp \
  /home/jessecoleman/graphpack/gbtl/src/graphblas/Matrix.hpp \
@@ -354,9 +357,7 @@ graphblas.cpython-35m-x86_64-linux-gnu.so: \
  /home/jessecoleman/graphpack/gbtl/src/graphblas/system/sequential/sparse_reduce.hpp \
  /home/jessecoleman/graphpack/gbtl/src/graphblas/system/sequential/sparse_transpose.hpp \
  /home/jessecoleman/graphpack/gbtl/src/graphblas/matrix_utils.hpp \
- /home/jessecoleman/graphpack/gbtl/src/graphblas/system/sequential/sequential.hpp \
- /home/jessecoleman/graphpack/gbtl/src/algorithms/metrics.hpp \
- /home/jessecoleman/graphpack/gbtl/src/algorithms/sssp.hpp
+ /home/jessecoleman/graphpack/gbtl/src/graphblas/system/sequential/sequential.hpp
 
 /usr/include/stdc-predef.h:
 
@@ -1146,6 +1147,16 @@ graphblas.cpython-35m-x86_64-linux-gnu.so: \
 
 /home/jessecoleman/.local/include/python3.5m/pybind11/operators.h:
 
+/home/jessecoleman/.local/include/python3.5m/pybind11/numpy.h:
+
+/home/jessecoleman/.local/include/python3.5m/pybind11/complex.h:
+
+/usr/include/c++/5/complex:
+
+/usr/include/c++/5/sstream:
+
+/usr/include/c++/5/bits/sstream.tcc:
+
 /home/jessecoleman/graphpack/gbtl/src/graphblas/graphblas.hpp:
 
 /home/jessecoleman/graphpack/gbtl/src/graphblas/detail/config.hpp:
@@ -1153,10 +1164,6 @@ graphblas.cpython-35m-x86_64-linux-gnu.so: \
 /home/jessecoleman/graphpack/gbtl/src/graphblas/types.hpp:
 
 /home/jessecoleman/graphpack/gbtl/src/graphblas/exceptions.hpp:
-
-/usr/include/c++/5/sstream:
-
-/usr/include/c++/5/bits/sstream.tcc:
 
 /home/jessecoleman/graphpack/gbtl/src/graphblas/detail/logging.h:
 
@@ -1241,7 +1248,3 @@ graphblas.cpython-35m-x86_64-linux-gnu.so: \
 /home/jessecoleman/graphpack/gbtl/src/graphblas/matrix_utils.hpp:
 
 /home/jessecoleman/graphpack/gbtl/src/graphblas/system/sequential/sequential.hpp:
-
-/home/jessecoleman/graphpack/gbtl/src/algorithms/metrics.hpp:
-
-/home/jessecoleman/graphpack/gbtl/src/algorithms/sssp.hpp:

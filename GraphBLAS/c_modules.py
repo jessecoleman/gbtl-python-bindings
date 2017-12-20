@@ -1,8 +1,6 @@
 import hashlib
 import importlib
 import inspect
-import numpy as np
-from collections import OrderedDict
 import os
 import subprocess
 import sys
@@ -37,27 +35,6 @@ PYEXT       = (
         subprocess.check_output("python3-config --extension-suffix".split())
         .decode("ascii").strip()
 )
-
-
-# mapping from python/numpy types to c types
-# ordered by typecasting heirarchy
-types = OrderedDict([
-        (None,      ""),
-        (bool,      "bool"),
-        (np.bool_,  "bool"),
-        (np.int8,   "int8_t"),
-        (np.uint8,  "uint8_t"),
-        (np.int16,  "int16_t"),
-        (np.uint16, "uint16_t"),
-        (np.int32,  "int32_t"),
-        (np.uint32, "uint32_t"),
-        (int,       "int64_t"),
-        (np.int64,  "int64_t"),
-        (np.uint64, "uint64_t"),
-        (np.float32,"float"),
-        (float,     "double"),
-        (np.float64,"double")
-])
 
 
 def get_module(target, args, kwargs):
@@ -118,29 +95,20 @@ class Cache(dict):
 
     def __getitem__(self, params):
 
-        target, args, kwargs, containers = params
+        target, args, kwargs = params
 
-        f_args = dict()  # function parameters
-        if isinstance(containers, dict):
-            for i, c in containers.items():
-                args.append(i + "_" + type(c).__name__)
-                kwargs.append((i + "_type", types[c.dtype]))
-                f_args[i] = c.container
-
+        # moduleID is only dependent on target and types
         module = dict.__getitem__(self, (
             target,
             tuple(sorted(args)), 
             tuple(sorted(kwargs))
         ))
 
-        if len(containers) == 0:
-            return module
-        else:
-            return module, f_args
+        return module
 
     def __missing__(self, args):
-        module = get_module(*args)
-        self[args] = module
-        return module
+        self[args] = get_module(*args)
+        return self[args]
             
-module_cache = Cache()
+cache = Cache()
+

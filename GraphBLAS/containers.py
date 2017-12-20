@@ -17,7 +17,7 @@ class Matrix(object):
 
             self.dtype = m.dtype
             self.shape = m.shape
-            module = c.get_container(self.dtype)
+            module = c.container(self.dtype)
 
             if copy == True:
                 self.container = module.Matrix(m.container)
@@ -31,7 +31,7 @@ class Matrix(object):
                 self.dtype = dtype
             else: 
                 self.dtype = c.get_type(m)
-            module = c.get_container(self.dtype)
+            module = c.container(self.dtype)
 
         # construct from scipy sparse matrix
         if (sparse.issparse(m)):
@@ -276,7 +276,7 @@ class Vector(object):
 
             self.dtype = v.dtype
             self.shape = v.shape
-            module = c.get_container(self.dtype)
+            module = c.container(self.dtype)
 
             if copy == True:
                 self.container = module.Vector(v.container)
@@ -292,7 +292,7 @@ class Vector(object):
             else: 
                 self.dtype = c.get_type(v)
 
-            module = c.get_container(self.dtype)
+            module = c.container(self.dtype)
 
 
         if isinstance(v, list):
