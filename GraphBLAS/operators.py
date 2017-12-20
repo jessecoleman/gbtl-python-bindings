@@ -1,4 +1,5 @@
 from abc import ABCMeta
+import attr
 from contextlib import ContextDecorator
 from collections import OrderedDict
 from .boundinnerclass import BoundInnerClass
@@ -75,13 +76,12 @@ class Expression(object, metaclass=ABCMeta):
         pass
 
 
+@attr.s
 class Accumulator(ContextDecorator):
 
     # keep track of accum precedence
     stack = []
-
-    def __init__(self, op):
-        self.binary_op = op
+    binary_op = attr.ib()
 
     def __enter__(self):
         global accumulator
@@ -105,19 +105,19 @@ BooleanAccumulate = Accumulator(binary_ops.logical_and)
 
 
 # make sure accum doesn't go out of scope before evaluating expressions
+@attr.s
 class Apply(object):
 
-    def __init__(self, op, bound_const=None):
-        self.unary_op = (op, bound_const)
-
+    unary_op = attr.ib()
+    bound_const = attr.ib(default=None)
 
     # partially applied
     @BoundInnerClass
+    @attr.s
     class expr(Expression):
 
-        def __init__(self, apply, A):
-            self.unary_op = apply.unary_op
-            self.A = A
+        apply = attr.ib()
+        A = attr.ib()
 
         def eval(self, C=None, accum=NoAccumulate):
 
@@ -130,16 +130,17 @@ class Apply(object):
             else: 
                 out = C
 
-            c.apply(
+            c.operator(
+                self.apply,
+                "apply",
                 accum.binary_op,
-                self.unary_op,
                 out.replace_flag,
                 A = self.A,
-                C = out.container,
-                M = out.mask
+                C = out.C,
+                M = out.M
             )
 
-            return out.container
+            return out.C
 
         def __repr__(self):
             return str(self.eval())
@@ -157,13 +158,15 @@ class Apply(object):
         else: return part.eval(C, accum)
 
 
+@attr.s
 class Semiring(ContextDecorator):
 
     # keep track of semiring precedence
     stack = []
 
-    def __init__(self, add_binop, add_idnty, mul_binop):
-        self.binary_ops = (add_binop, add_idnty, mul_binop)
+    add_binaryop = attr.ib()
+    add_identity = attr.ib()
+    mult_binaryop = attr.ib()
 
     def __enter__(self):
         global semiring
@@ -177,13 +180,13 @@ class Semiring(ContextDecorator):
         return False
 
     @BoundInnerClass
+    @attr.s
     class expr(Expression):
 
-        def __init__(self, semiring, op, A, B):
-            self.semiring = semiring.binary_ops
-            self.binary_op = op
-            self.A = A
-            self.B = B
+        semiring = attr.ib()
+        function = attr.ib()
+        A = attr.ib()
+        B = attr.ib()
 
         def eval(self, C=None, accum=NoAccumulate):
 
@@ -196,18 +199,18 @@ class Semiring(ContextDecorator):
             else: 
                 out = C
 
-            c.semiring(
-                self.binary_op,
+            c.operator(
                 self.semiring,
+                self.function,
                 accum.binary_op,
                 out.replace_flag,
                 A = self.A,
                 B = self.B,
-                C = out.container,
-                M = out.mask
+                C = out.C,
+                M = out.M
             )
 
-            return out.container
+            return out.C
 
         def __repr__(self):
             return str(self.eval())

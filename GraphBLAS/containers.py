@@ -1,8 +1,16 @@
+import attr
 import numpy as np
 from scipy import sparse
 from .boundinnerclass import BoundInnerClass
 from . import c_functions as c
 from . import operators as ops
+
+
+class NoMask(object):
+
+    def __init__(self):
+        self.container = c.no_mask()
+        self.dtype = None
 
 
 class Matrix(object):
@@ -117,20 +125,16 @@ class Matrix(object):
 
 
     @BoundInnerClass
+    @attr.s
     class masked(object):
 
-        def __init__(self, matrix, mask=None, replace_flag=False):
+        C = attr.ib()
+        M = attr.ib(default=NoMask())
+        replace_flag = attr.ib(default=False)
 
-            self.container = matrix
-            self.replace_flag = replace_flag
-
-            if mask is None:
-                self.mask = NoMask()
-
-            elif isinstance(mask, Matrix):
-                self.mask = mask
-
-            else:
+        @M.validator
+        def check_mask(self, attribute, value):
+            if not isinstance(value, (Matrix, NoMask)):
                 raise TypeError("Incorrect type for mask parameter")
 
         def __iadd__(self, other):
@@ -366,21 +370,16 @@ class Vector(object):
 
 
     @BoundInnerClass
+    @attr.s
     class masked(object):
-        "object returned by call to __getitem__ on vector"
 
-        def __init__(self, vector, mask=None, replace_flag=False):
+        C = attr.ib()
+        M = attr.ib(default=NoMask())
+        replace_flag = attr.ib(default=False)
 
-            self.container = vector
-            self.replace_flag = replace_flag
-
-            if mask is None:
-                self.mask = NoMask()
-
-            elif isinstance(mask, Vector):
-                self.mask = mask
-
-            else:
+        @M.validator
+        def check_mask(self, attribute, value):
+            if not isinstance(value, (Vector, NoMask)):
                 raise TypeError("Incorrect type for mask parameter")
 
         def __iadd__(self, other):
@@ -493,8 +492,3 @@ class VectorComplement(Vector):
         return self.source
 
 
-class NoMask(object):
-
-    def __init__(self):
-        self.container = c.no_mask()
-        self.dtype = None

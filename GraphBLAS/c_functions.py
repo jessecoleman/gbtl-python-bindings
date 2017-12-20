@@ -1,3 +1,4 @@
+import attr
 from collections import OrderedDict
 from functools import partial
 import numpy as np
@@ -43,41 +44,17 @@ def algorithm(target, algorithm, **containers):
             containers  = containers
     )
 
-def apply(op, const, accum, replace_flag, **containers):
+def operator(operator, function, accum, replace_flag, **containers):
 
-    args = []
-    kwargs [("apply_op", op)]
+    args = [type(operator).__name__, function]
+    ops = attr.asdict(operator)
+    kwargs = list(ops.items())
 
-    if const is not None:
-        kwargs.append(("bound_const", const))
-
-    if accum is not None:
-        kwargs.append(("accum_binaryop", str(accum)))
-
-    else:
-        args.append("no_accum")
-
-    return get_function(
-            target      = "apply", 
-            function    = "apply",
-            args        = args, 
-            kwargs      = kwargs, 
-            containers  = container
-    )(replace_flag=replace_flag)
-    
-def semiring(operator, semiring, accum, replace_flag, **containers):
-
-    args = [operator]
-
-    add_binop, add_idnty, mult_binop = semiring
-    kwargs = [
-        ("add_binaryop", add_binop),
-        ("add_identity", add_idnty),
-        ("mult_binaryop", mult_binop),
-    ]
+    if ops.get("bound_const", None) is not None:
+        kwargs.append(("bound_const", ops["bound_const"]))
 
     # set default min identity
-    if add_idnty == "MinIdentity":
+    if ops.get("add_identity", None) == "MinIdentity":
         args.append("min_identity")
 
     # set default accumulate operator
@@ -88,7 +65,7 @@ def semiring(operator, semiring, accum, replace_flag, **containers):
 
     get_function(
             target      = "operators",
-            function    = operator,
+            function    = function,
             args        = args,
             kwargs      = kwargs,
             containers  = containers

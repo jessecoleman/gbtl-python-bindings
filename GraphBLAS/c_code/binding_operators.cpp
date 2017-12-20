@@ -57,19 +57,26 @@ typedef GraphBLAS::NoMask MMatrixT;
 typedef GraphBLAS::NoMask MVectorT;
 #endif
 
-#ifdef MIN_IDENTITY
+#if defined(SEMIRING) && defined(MIN_IDENTITY)
 #define IDENTITY std::numeric_limits<C_TYPE>::max()
-#else
+#elif defined(SEMIRING)
 #define IDENTITY ADD_IDENTITY
 #endif
 
-#ifdef NO_ACCUM
+#if defined(APPLY) && defined(BOUND_CONST)
+typedef GraphBLAS::BinaryOp_Bind2nd<A_TYPE, GraphBLAS::UNARY_OP<A_TYPE, C_TYPE>> ApplyT;
+#elif defined(APPLY)
+#define BOUND_CONST
+typedef GraphBLAS::UNARY_OP<A_TYPE, C_TYPE> ApplyT;
+#endif
+
+#if defined(NO_ACCUM)
 typedef GraphBLAS::NoAccumulate AccumT;
 #else
 typedef GraphBLAS::ACCUM_BINARYOP<C_TYPE> AccumT;
 #endif
 
-// create monoid and semiring from macro
+#if defined(SEMIRING)
 GEN_GRAPHBLAS_MONOID(Monoid, GraphBLAS::ADD_BINARYOP, IDENTITY)
 GEN_GRAPHBLAS_SEMIRING(Semiring, Monoid, GraphBLAS::MULT_BINARYOP)
 
@@ -77,6 +84,7 @@ typedef Monoid<C_TYPE> MonoidT;
 typedef GraphBLAS::ADD_BINARYOP<A_TYPE> AddBinaryOp;
 typedef GraphBLAS::MULT_BINARYOP<A_TYPE, B_TYPE, C_TYPE> MultBinaryOp;
 typedef Semiring<A_TYPE, B_TYPE, C_TYPE> SemiringT;
+#endif
 
 #if defined(MXM)
 // TODO check order of parameters
@@ -148,10 +156,29 @@ void eWiseMultVector(
         bool replace_flag
     )
 { GraphBLAS::eWiseMult(C, M, AccumT(), MultBinaryOp(), A, B, replace_flag); }
+
+#elif defined(APPLY) && defined(C_MATRIX)
+void applyMatrix(
+        CMatrixT &C,
+        MMatrixT const &M,
+        AMatrixT const &A,
+        bool replace_flag
+    )
+{ GraphBLAS::apply(C, M, AccumT(), ApplyT(BOUND_CONST), A, replace_flag); }
+
+#elif defined(APPLY) && defined(C_VECTOR)
+void applyVector(
+        WVectorT &C,
+        MVectorT const &M,
+        UVectorT const &A, 
+        bool replace_flag
+   )
+{ GraphBLAS::apply(C, M, AccumT(), ApplyT(BOUND_CONST), A, replace_flag); }
 #endif
 
 PYBIND11_MODULE(MODULE, m) {
 
+#if defined(SEMIRING)
     py::class_<MonoidT>(m, "Monoid", py::module_local())
         .def(py::init<>())
         .def("identity", &MonoidT::identity);
@@ -161,6 +188,7 @@ PYBIND11_MODULE(MODULE, m) {
         .def("add", &SemiringT::add)
         .def("mult", &SemiringT::mult)
         .def("zero", &SemiringT::zero);
+#endif
 
 #if defined(MXM)
     m.def("mxm", &mxm, "C"_a, "M"_a, "A"_a, "B"_a, "replace_flag"_a);
@@ -176,5 +204,9 @@ PYBIND11_MODULE(MODULE, m) {
     m.def("eWiseMultMatrix", &eWiseMultMatrix, "C"_a, "M"_a, "A"_a, "B"_a, "replace_flag"_a);
 #elif defined(EWISEMULTVECTOR)
     m.def("eWiseMultVector", &eWiseMultVector, "C"_a, "M"_a, "A"_a, "B"_a, "replace_flag"_a);
+#elif defined(APPLY) && defined(C_MATRIX)
+    m.def("apply", &applyMatrix, "C"_a, "M"_a, "A"_a, "replace_flag"_a);
+#elif defined(APPLY) && defined(C_VECTOR)
+    m.def("apply", &applyVector, "C"_a, "M"_a, "A"_a, "replace_flag"_a);
 #endif
 }
