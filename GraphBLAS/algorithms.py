@@ -1,7 +1,8 @@
 from GraphBLAS import c_functions as c
 from GraphBLAS import Matrix, Vector
 
-def bfs(graph, wavefront, parent_list=None):
+@c.typecheck
+def bfs(graph: Matrix, wavefront: Vector, parent_list=None):
     if not isinstance(wavefront, Vector):
         w = [0] * graph.shape[1]
         w[wavefront] = 1
@@ -12,14 +13,16 @@ def bfs(graph, wavefront, parent_list=None):
 
     c.algorithm(
             target      = "bfs_variants",
-            algorithm    = "bfs",
+            algorithm   = "bfs",
             graph       = graph,
             wavefront   = wavefront,
             parent_list = parent_list
     )()
+
     return parent_list
 
-def bfs_batch(graph, wavefronts, parent_list=None):
+@c.typecheck
+def bfs_batch(graph: Matrix, wavefronts: Matrix, parent_list=None):
     # TODO
     #if not isinstance(wavefront, Matrix):
     #    w = [0] * graph.shape[1]
@@ -36,35 +39,55 @@ def bfs_batch(graph, wavefronts, parent_list=None):
             wavefronts  = wavefronts,
             parent_list = parent_list
     )()
+
     return parent_list
 
-def maxflow(capacity, source, sink):
-    pass
+@c.typecheck
+def maxflow(capacity: Matrix, source: int, sink: int):
 
-def vertex_in_degree(graph, vid):
+    return c.algorithm(
+            target      = "maxflow",
+            algorithm   = "maxflow",
+            capacity    = capacity
+    )(
+            source      = source,
+            sink        = sink
+    )
+
+@c.typecheck
+def vertex_in_degree(graph: Matrix, vid: int):
 
     return c.algorithm(
             target      = "metrics", 
             algorithm   = "vertex_in_degree", 
             graph       = graph
-    )(vid=vid)
+    )(
+            vid         = vid
+    )
 
-def vertex_out_degree(graph, vid):
+@c.typecheck
+def vertex_out_degree(graph: Matrix, vid: int):
     return c.algorithm(
             target      = "metrics", 
             algorithm   = "vertex_out_degree", 
             graph       = graph
-    )(vid=vid)
+    )(      
+            vid         = vid
+    )
 
-def vertex_degree(graph, vid):
+@c.typecheck
+def vertex_degree(graph: Matrix, vid: int):
 
     return c.algorithm(
             target      = "metrics", 
             algorithm   = "vertex_degree", 
             graph       = graph
-    )(vid=vid)
+    )(
+            vid         = vid
+    )
 
-def graph_distance(graph, sid, result=None):
+@c.typecheck
+def graph_distance(graph: Matrix, sid: int, result: Vector=None):
 
     if result is None:
         result = Vector(shape=graph.shape[0], dtype=graph.dtype)
@@ -74,9 +97,12 @@ def graph_distance(graph, sid, result=None):
             algorithm   = "graph_distance", 
             graph       = graph,
             result      = result,
-    )(sid=sid)
+    )(
+            sid         = sid
+    )
 
-def graph_distance_matrix(graph, result=None):
+@c.typecheck
+def graph_distance_matrix(graph: Matrix, result: Matrix = None):
 
     if result is None:
         result = Matrix(shape=graph.shape, dtype=graph.dtype)
@@ -88,15 +114,19 @@ def graph_distance_matrix(graph, result=None):
             result      = result,
     )()
 
-def vertex_eccentricity(graph, vid):
+@c.typecheck
+def vertex_eccentricity(graph: Matrix, vid: int):
 
     return c.algorithm(
             target      = "metrics",
             algorithm   = "vertex_eccentricity",
             graph       = graph
-    )(vid=vid)
+    )(
+            vid         = vid
+    )
 
-def graph_radius(graph):
+@c.typecheck
+def graph_radius(graph: Matrix):
 
     return c.algorithm(
             target      = "metrics",
@@ -104,7 +134,8 @@ def graph_radius(graph):
             graph       = graph
     )()
 
-def graph_diameter(graph):
+@c.typecheck
+def graph_diameter(graph: Matrix):
 
     return c.algorithm(
             target      = "metrics",
@@ -112,19 +143,50 @@ def graph_diameter(graph):
             graph       = graph
     )()
 
-def closeness_centrality(graph, vid):
-    pass
+@c.typecheck
+def closeness_centrality(graph: Matrix, vid: int):
 
-def get_vertex_IDs(independent_set):
-    pass
+    return c.algorithm(
+            target      = "metrics",
+            algorithm   = "closeness_centrality",
+            graph       = graph
+    )(
+            vid         = vid
+    )
 
-def mis(graph, independent_set, seed):
-    pass
+@c.typecheck
+def get_vertex_IDs(independent_set: Matrix):
 
-def mst(graph, parents):
-    pass
+    return c.algorithm(
+            target          = "mis",
+            algorithm       = "get_vertex_IDs",
+            independent_set = independent_set
+    )()
 
-def sssp(matrix, paths):
+@c.typecheck
+def mis(graph: Matrix, independent_set: Vector, seed: int = 0):
+
+    return c.algorithm(
+            target          = "mis",
+            algorithm       = "mis",
+            graph           = graph,
+            independent_set = independent_set
+    )(
+            seed            = seed        
+    )
+
+@c.typecheck
+def mst(graph: Matrix, parents: Vector):
+
+    return c.algorithm(
+            target      = "mst",
+            algorithm   = "mst",
+            graph       = graph,
+            parents     = parents
+    )()
+
+@c.typecheck
+def sssp(matrix: Matrix, paths: Vector):
 
     return c.algorithm(
             target      = "sssp", 
@@ -132,7 +194,8 @@ def sssp(matrix, paths):
             paths       = paths
     )()
 
-def triangle_count(l_matrix, u_matrix):
+@c.typecheck
+def triangle_count(l_matrix: Matrix, u_matrix: Matrix):
     return c.algorithm(
             target      = "tricount", 
             algorithm   = "triangle_count",
@@ -140,7 +203,9 @@ def triangle_count(l_matrix, u_matrix):
             u_matrix    = u_matrix
     )()
 
-def triangle_count_newGBTL(l_matrix, u_matrix):
+@c.typecheck
+def triangle_count_newGBTL(l_matrix: Matrix, u_matrix: Matrix):
+
     return c.algorithm(
             target      = "tricount",
             algorithm   = "triangle_count_newGBTL",

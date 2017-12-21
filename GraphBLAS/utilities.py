@@ -1,6 +1,7 @@
 from . import c_functions as c
 from . import Vector, Matrix
 
+@c.tc(Vector)
 def diagonal(vector):
     length = vector.shape[0]
     matrix = Matrix(
@@ -11,14 +12,16 @@ def diagonal(vector):
     )
     return matrix
 
-def scaled_identity(shape, scalar):
+@c.typecheck
+def scaled_identity(shape: int, scalar: (int, float)):
 
     return c.utilities(
             function    = "scaled_identity",
             kwargs      = [("a_type", c.types[type(scalar)])],
     )(mat_size=shape, val=scalar)
 
-def split(matrix):
+@c.typecheck
+def split(matrix: Matrix):
 
     lower = matrix._out_container()
     upper = matrix._out_container()
@@ -27,17 +30,19 @@ def split(matrix):
             A = matrix,
             L = lower,
             U = upper
-    )
+    )()
     return lower, upper
 
-def normalize_rows(matrix):
+@c.typecheck
+def normalize_rows(matrix: Matrix):
 
-    c.utilities("normalize_rows", matrix=matrix)
+    f = c.utilities("normalize_rows", A=matrix)
     return matrix
 
-def normalize_cols(matrix):
+@c.typecheck
+def normalize_cols(matrix: Matrix):
 
-    c.utilities("normalize_cols", matrix=matrix)
+    c.utilities("normalize_cols", A=matrix)()
     return matrix
 
 # TODO implement dimension checking

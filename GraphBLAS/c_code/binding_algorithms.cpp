@@ -64,9 +64,6 @@ PYBIND11_MODULE(MODULE, m) {
 #elif defined(WAVEFRONT_TYPE) && defined(LEVEL_LIST_TYPE)
     m.def("bfs_level", &algorithms::bfs_level<GraphT, WavefrontMatrixT, LevelListMatrixT>, "graph"_a, "wavefront"_a, "level_list"_a);
 #elif defined(MAXFLOW)
-    m.def("push",       &algorithms::push<MatrixT, VectorT>, "C"_a, "F"_a, "excess"_a, "u"_a, "v"_a);
-    m.def("relabel",    &algorithms::relabel<MatrixT, VectorT>, "C"_a, "F"_a, "height"_a, "u"_a);
-    m.def("discharge",  &algorithms::discharge<MatrixT, VectorT>, "C"_a, "F"_a, "excess"_a, "height"_a, "seen"_a, "u"_a);
     m.def("maxflow",    &algorithms::maxflow<MatrixT>, "capacity"_a, "source"_a, "sink"_a);
 #elif defined(METRICS)
     m.def("vertex_in_degree",       &algorithms::vertex_in_degree<MatrixT>, "graph"_a, "vid"_a);
@@ -80,7 +77,7 @@ PYBIND11_MODULE(MODULE, m) {
     m.def("closeness_centrality",   &algorithms::closeness_centrality<MatrixT>, "graph"_a, "vid"_a);
 #elif defined(MIS)
     m.def("get_vertex_IDs", &algorithms::get_vertex_IDs<MatrixT>, "independent_set"_a);
-    m.def("mis", &algorithms::mis<MatrixT>, "graph"_a, "independent_set"_a, "seed"_a=0);
+    m.def("mis", &algorithms::mis<MatrixT>, "graph"_a, "independent_set"_a, "seed"_a);
 #elif defined(MST)
     m.def("mst", &algorithms::mst<MatrixT>, "graph"_a, "mst_parents"_a);
 #elif defined(PAGERANK)

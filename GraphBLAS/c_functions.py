@@ -1,5 +1,6 @@
 import attr
 from collections import OrderedDict
+import inspect
 from functools import partial
 import numpy as np
 from . import c_modules as c_mod
@@ -35,7 +36,10 @@ def container(dtype):
             kwargs = [("dtype", types[dtype])]
     )
 
-def algorithm(target, algorithm, **containers):
+def algorithm(target, algorithm=None, **containers):
+
+    if algorithm is None:
+        algorithm = target
 
     return get_function(
             target      = "algorithms",
@@ -101,6 +105,7 @@ def get_type(container):
             container = container[0]
         return type(container)
 
+import inspect
 def get_function(target, function=None, args=None, kwargs=None, containers=None):
 
     if args is None: args = []
@@ -122,3 +127,17 @@ def get_function(target, function=None, args=None, kwargs=None, containers=None)
 
     else: return module
 
+def typecheck(function):
+    def _f(*args):
+        args = list(args)
+        print(inspect.getfullargspec(function)[0])
+        for i, arg in enumerate(inspect.getfullargspec(function)[0]):
+            while not isinstance(args[i], function.__annotations__[arg]):
+                try:
+                    args[i] = args[i].evaluated
+                except:
+                    raise TypeError("{} is not of type {}".format(args[i], arg))
+        return function(*args)
+    _f.__doc__ = function.__doc__
+    return _f
+    

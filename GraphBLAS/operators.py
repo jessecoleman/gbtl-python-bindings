@@ -82,6 +82,14 @@ class _Expression(ABC):
             self._evaluated = self.eval()
         return self._evaluated
 
+    @property
+    def dtype(self):
+        return self.evaluated.dtype
+
+    @property
+    def shape(self):
+        return self.evaluated.shape
+
     def __neg__(self):
         return -self.evaluated
 
@@ -255,7 +263,7 @@ class Semiring(ContextDecorator):
                 M = out.M
             )
 
-            self.evaluated = out.C
+            self._evaluated = out.C
             return self.evaluated
 
 
