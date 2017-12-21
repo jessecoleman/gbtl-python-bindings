@@ -1,5 +1,5 @@
-from abc import ABCMeta
-import attr
+from abc import ABC, abstractmethod
+from attr import attrs, attrib
 from contextlib import ContextDecorator
 from collections import OrderedDict
 from .boundinnerclass import BoundInnerClass
@@ -8,8 +8,8 @@ from . import c_functions as c
 cache_flag = False
 
 __all__ = [
-    "Apply",
     "Accumulator",
+    "Apply",
     "Semiring",
     "BooleanAccumulate",
     "ArithmeticAccumulate",
@@ -32,7 +32,6 @@ __all__ = [
 accumulator = None
 semiring = None
 
-
 # dictionary of values to build operators
 class OperatorMap(dict):
     def __init__(self, keys):
@@ -42,6 +41,10 @@ class OperatorMap(dict):
 
     def __getattr__(self, attr):
         return self.get(attr)
+
+    # TODO turn this into field for operator functions
+    def __get__(self, instance, owner):
+        pass
 
 
 unary_ops = OperatorMap({
@@ -68,20 +71,33 @@ identities = OperatorMap({
     "minimum": "MinIdentity"
 })
 
-
-class Expression(object, metaclass=ABCMeta):
+class _Expression(ABC):
     
-    #@abstractmethod
-    def eval():
-        pass
+    @abstractmethod
+    def eval(): pass
+
+    @property
+    def evaluated(self):
+        if not hasattr(self, "_evaluated"):
+            self._evaluated = self.eval()
+        return self._evaluated
+
+    def __neg__(self):
+        return -self.evaluated
+
+    def __invert__(self):
+        return ~self.evaluated
+
+    def __repr__(self):
+        return str(self.evaluated)
 
 
-@attr.s
+@attrs(cmp=False)
 class Accumulator(ContextDecorator):
 
     # keep track of accum precedence
     stack = []
-    binary_op = attr.ib()
+    binary_op = attrib()
 
     def __enter__(self):
         global accumulator
@@ -94,9 +110,6 @@ class Accumulator(ContextDecorator):
         accumulator = Accumulator.stack.pop()
         return False
 
-    def __repr__(self):
-        return self.binaryop
-
 
 # default accumulators
 NoAccumulate = Accumulator("NoAccumulate")
@@ -105,30 +118,37 @@ BooleanAccumulate = Accumulator(binary_ops.logical_and)
 
 
 # make sure accum doesn't go out of scope before evaluating expressions
-@attr.s
+@attrs(cmp=False)
 class Apply(object):
 
-    unary_op = attr.ib()
-    bound_const = attr.ib(default=None)
+    unary_op    = attrib()
+    bound_const = attrib(default=None)
 
-    # partially applied
-    @BoundInnerClass
-    @attr.s
-    class expr(Expression):
+    def __call__(self, A, C=None, accum=None):
 
-        apply = attr.ib()
-        A = attr.ib()
+        if C is None and accum is not None:
+            raise Exception("if accum is defined, expression needs to be evaluated on the spot")
 
-        def eval(self, C=None, accum=NoAccumulate):
+        if isinstance(A, _Expression): A = A.eval()
 
-            if C is None:
-                C = self.A._out_container()
+        expr = Apply.Expression(self, A)
+        if C is None: return expr
+        else: return expr.eval(C, accum)
 
-            if hasattr(C, "masked"): 
-                out = C.masked()
 
-            else: 
-                out = C
+    @attrs(cmp=False, repr=False)
+    class Expression(_Expression):
+
+        apply   = attrib()
+        A       = attrib()
+
+        def eval(self, out=None, accum=NoAccumulate):
+
+            if out is None:
+                out = self.A._out_container()
+
+            if hasattr(out, "masked"): 
+                out = out.masked()
 
             c.operator(
                 self.apply,
@@ -140,33 +160,23 @@ class Apply(object):
                 M = out.M
             )
 
-            return out.C
-
-        def __repr__(self):
-            return str(self.eval())
-
-    def __call__(self, A, C=None, accum=None):
-
-        if C is None and accum is not None:
-            raise Exception("if accum is defined, expression needs to be evaluated on the spot")
-
-        if isinstance(A, Expression):
-            A = A.eval()
-
-        part = self.expr(A)
-        if C is None: return part
-        else: return part.eval(C, accum)
+            self._evaluated = out.C
+            return self.evaluated
 
 
-@attr.s
+Identity = Apply(unary_ops.identity)
+AdditiveInverse = Apply(unary_ops.additive_inverse)
+MultiplicativeInverse = Apply(unary_ops.multiplicative_inverse)
+
+
+@attrs(cmp=False)
 class Semiring(ContextDecorator):
 
     # keep track of semiring precedence
     stack = []
-
-    add_binaryop = attr.ib()
-    add_identity = attr.ib()
-    mult_binaryop = attr.ib()
+    add_binaryop = attrib()
+    add_identity = attrib()
+    mult_binaryop = attrib()
 
     def __enter__(self):
         global semiring
@@ -179,53 +189,17 @@ class Semiring(ContextDecorator):
         semring = Semiring.stack.pop()
         return False
 
-    @BoundInnerClass
-    @attr.s
-    class expr(Expression):
-
-        semiring = attr.ib()
-        function = attr.ib()
-        A = attr.ib()
-        B = attr.ib()
-
-        def eval(self, C=None, accum=NoAccumulate):
-
-            if C is None:
-                C = self.A._out_container(self.B)
-
-            # if C is not masked, mask it with NoMask
-            if hasattr(C, "masked"): 
-                out = C.masked()
-            else: 
-                out = C
-
-            c.operator(
-                self.semiring,
-                self.function,
-                accum.binary_op,
-                out.replace_flag,
-                A = self.A,
-                B = self.B,
-                C = out.C,
-                M = out.M
-            )
-
-            return out.C
-
-        def __repr__(self):
-            return str(self.eval())
-
     def partial(self, op, A, B, C, accum):
 
         if C is None and accum is not None:
             raise Exception("if accum is defined, expression needs to be evaluated on the spot")
 
-        if isinstance(A, Expression): A = A.eval()
-        if isinstance(B, Expression): B = B.eval()
+        if isinstance(A, _Expression): A = A.eval()
+        if isinstance(B, _Expression): B = B.eval()
 
-        part = self.expr(op, A, B)
-        if C is None: return part
-        else: return part.eval(C, accum)
+        expr = Semiring.Expression(self, op, A, B)
+        if C is None: return expr
+        else: return expr.eval(C, accum)
 
     # mask and replace are configured at evaluation by C param
     # accum is optionally configured at evaluation
@@ -254,10 +228,35 @@ class Semiring(ContextDecorator):
         return self.partial("vxm", A, B, C, accum)
 
 
-# default binary operators
-Identity = Apply(unary_ops.identity)
-AdditiveInverse = Apply(unary_ops.additive_inverse)
-MultiplicativeInverse = Apply(unary_ops.multiplicative_inverse)
+    @attrs(cmp=False, repr=False)
+    class Expression(_Expression):
+
+        semiring    = attrib()
+        function    = attrib()
+        A           = attrib()
+        B           = attrib()
+
+        def eval(self, out=None, accum=NoAccumulate):
+
+            if out is None:
+                out = self.A._out_container(self.B)
+
+            if hasattr(out, "masked"): 
+                out = out.masked()
+
+            c.operator(
+                self.semiring,
+                self.function,
+                accum.binary_op,
+                out.replace_flag,
+                A = self.A,
+                B = self.B,
+                C = out.C,
+                M = out.M
+            )
+
+            self.evaluated = out.C
+            return self.evaluated
 
 
 # default semirings

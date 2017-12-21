@@ -46,12 +46,14 @@ def algorithm(target, algorithm, **containers):
 
 def operator(operator, function, accum, replace_flag, **containers):
 
-    args = [type(operator).__name__, function]
     ops = attr.asdict(operator)
-    kwargs = list(ops.items())
 
-    if ops.get("bound_const", None) is not None:
-        kwargs.append(("bound_const", ops["bound_const"]))
+    # set bound constant if apply binary_op
+    if ops.get("bound_const", False) is None:
+        del ops["bound_const"]
+
+    args = [type(operator).__name__, function]
+    kwargs = list(ops.items())
 
     # set default min identity
     if ops.get("add_identity", None) == "MinIdentity":

@@ -1,4 +1,4 @@
-import attr
+from attr import attrs, attrib
 import numpy as np
 from scipy import sparse
 from .boundinnerclass import BoundInnerClass
@@ -6,11 +6,11 @@ from . import c_functions as c
 from . import operators as ops
 
 
+@attrs(cmp=False)
 class NoMask(object):
 
-    def __init__(self):
-        self.container = c.no_mask()
-        self.dtype = None
+    container   = attrib(default=c.no_mask())
+    dtype       = attrib(default=None)
 
 
 class Matrix(object):
@@ -123,14 +123,16 @@ class Matrix(object):
     def __invert__(self):
         return MatrixComplement(self)
 
+    def __neg__(self):
+        return ops.AdditiveInverse(self)
 
     @BoundInnerClass
-    @attr.s
+    @attrs(cmp=False)
     class masked(object):
 
-        C = attr.ib()
-        M = attr.ib(default=NoMask())
-        replace_flag = attr.ib(default=False)
+        C               = attrib()
+        M               = attrib(default=NoMask())
+        replace_flag    = attrib(default=False)
 
         @M.validator
         def check_mask(self, attribute, value):
@@ -368,18 +370,20 @@ class Vector(object):
     def __invert__(self):
         return VectorComplement(self)
 
+    def __neg__(self):
+        return ops.AdditiveInverse(self)
 
     @BoundInnerClass
-    @attr.s
+    @attrs(cmp=False)
     class masked(object):
 
-        C = attr.ib()
-        M = attr.ib(default=NoMask())
-        replace_flag = attr.ib(default=False)
+        C               = attrib()
+        M               = attrib(default=NoMask())
+        replace_flag    = attrib(default=False)
 
         @M.validator
-        def check_mask(self, attribute, value):
-            if not isinstance(value, (Vector, NoMask)):
+        def check_mask(self, attribute, M):
+            if not isinstance(M, (Vector, NoMask)):
                 raise TypeError("Incorrect type for mask parameter")
 
         def __iadd__(self, other):
