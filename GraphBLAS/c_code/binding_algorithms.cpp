@@ -52,8 +52,15 @@ typedef GraphBLAS::Vector<GRAPH_TYPE> VectorT;
 #include <algorithms/page_rank.hpp>
 #elif defined(SSSP)
 #include <algorithms/sssp.hpp>
-#elif defined(TRICOUNT)
-#include <algorithms/tricount.hpp>
+
+#elif defined(TRIANGLE_COUNT)
+#include <algorithms/triangle_count.hpp>
+#if defined(GRAPH_TYPE)
+typedef GraphBLAS::Matrix<GRAPH_TYPE> MatrixT;
+#elif defined(L_TYPE)
+typedef GraphBLAS::Matrix<L_TYPE> MatrixT;
+#endif
+
 #endif
 
 PYBIND11_MODULE(MODULE, m) {
@@ -91,12 +98,12 @@ PYBIND11_MODULE(MODULE, m) {
 #elif defined(SSSP)
     m.def("sssp", &algorithms::sssp<MatrixT, PathVectorT>, "graph"_a, "path"_a);
     m.def("batch_sssp", &algorithms::sssp<MatrixT, PathMatrixT>, "graph"_a, "paths"_a);
-#elif defined(TRICOUNT)
+#elif defined(TRIANGLE_COUNT)
     m.def("triangle_count", &algorithms::triangle_count<MatrixT>, "graph"_a);
     m.def("triangle_count_masked", &algorithms::triangle_count<MatrixT>, "L"_a);
     m.def("triangle_count_flame1", &algorithms::triangle_count<MatrixT>, "graph"_a);
     m.def("triangle_count_flame1a", &algorithms::triangle_count<MatrixT>, "graph"_a);
     m.def("triangle_count_flame2", &algorithms::triangle_count<MatrixT>, "graph"_a);
-    m.def("triangle_count_newGBTL", &algorithms::triangle_count_newGBTL<LMatrixT, MatrixT>, "L"_a, "U"_a);
+    //m.def("triangle_count_newGBTL", &algorithms::triangle_count_newGBTL<LMatrixT, MatrixT>, "L"_a, "U"_a);
 #endif
 }

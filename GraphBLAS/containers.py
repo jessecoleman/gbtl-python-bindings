@@ -92,24 +92,32 @@ class Matrix(object):
     def __iadd__(self, expr):
         raise Exception("use {}[:] notation to assign into container".format(type(self)))
 
-    def __add__(self, other):
+    #@c.type_check
+    def __add__(self, other: 'Matrix'):
         return ops.semiring.eWiseAddMatrix(self, other)
 
-    def __radd__(self, other):
+    #@c.type_check
+    def __radd__(self, other: 'Matrix'):
         return ops.semiring.eWiseAddMatrix(other, self)
 
-    def __mul__(self, other):
+    #@c.type_check
+    def __mul__(self, other: 'Matrix'):
         return ops.semiring.eWiseMultMatrix(self, other)
 
-    def __rmul__(self, other):
+    #@c.type_check
+    def __rmul__(self, other: 'Matrix'):
         return ops.semiring.eWiseMultMatrix(other, self)
 
-    def __matmul__(self, other):
+    # TODO type unions
+    #@c.type_check
+    def __matmul__(self, other: 'Matrix'):
         if isinstance(other, Matrix):
             return ops.semiring.mxm(self, other)
         elif isinstance(other, Vector):
             return ops.semiring.mxv(self, other)
 
+    # TODO type unions
+    #@c.type_check
     def __rmatmul__(self, other):
         if isinstance(other, Matrix):
             return ops.semiring.mxm(other, self)
@@ -349,22 +357,28 @@ class Vector(object):
     def __iadd__(self, expr):
         raise Exception("use {}[:] notation to assign into container".format(type(self)))
 
-    def __add__(self, other):
+    #@c.type_check
+    def __add__(self, other: 'Vector'):
         return ops.semiring.eWiseAddVector(self, other)
 
-    def __radd__(self, other):
+    #@c.type_check
+    def __radd__(self, other: 'Vector'):
         return ops.semiring.eWiseAddVector(other, self)
 
-    def __mul__(self, other):
+    #@c.type_check
+    def __mul__(self, other: 'Vector'):
         return ops.semiring.eWiseMultVector(self, other)
 
-    def __rmul__(self, other):
+    #@c.type_check
+    def __rmul__(self, other: 'Vector'):
         return ops.semiring.eWiseMultVector(other, self)
 
-    def __matmul__(self, other):
+    #@c.type_check
+    def __matmul__(self, other: 'Matrix'):
         return ops.semiring.vxm(self, other)
 
-    def __rmatmul__(self, other):
+    #@c.type_check
+    def __rmatmul__(self, other: 'Matrix'):
         return ops.semiring.mxv(other, self)
 
     def __invert__(self):

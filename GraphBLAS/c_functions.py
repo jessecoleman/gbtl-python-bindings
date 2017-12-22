@@ -1,8 +1,8 @@
 import attr
 from collections import OrderedDict
 import inspect
-from functools import partial
 import numpy as np
+from toolz import curry
 from . import c_modules as c_mod
 
 # mapping from python/numpy types to c types
@@ -36,15 +36,36 @@ def container(dtype):
             kwargs = [("dtype", types[dtype])]
     )
 
-def algorithm(target, algorithm=None, **containers):
+algorithm_dict = {
+        "bfs": "bfs",
+        "bfs_batch": "bfs",
+        "bfs_level": "bfs",
+        "vertex_in_degree": "metrics",
+        "vertex_out_degree": "metrics",
+        "vertex_degree": "metrics",
+        "graph_distance": "metrics",
+        "graph_distance_matrix": "metrics",
+        "vertex_eccentricity": "metrics",
+        "graph_radius": "metrics",
+        "graph_diameter": "metrics",
+        "closeness_centrality": "metrics",
+        "get_vertex_IDs": "mis",
+        "triangle_count": "triangle_count",
+        "triangle_count_masked": "triangle_count",
+        "triangle_count_flame1": "triangle_count",
+        "triangle_count_flame1a": "triangle_count",
+        "triangle_count_flame2": "triangle_count",
+        "triangle_count_newGBTL": "triangle_count"
+}
+        
+def algorithm(algorithm, **containers):
 
-    if algorithm is None:
-        algorithm = target
+    alg_group = algorithm_dict.get(algorithm, algorithm)
 
     return get_function(
             target      = "algorithms",
             function    = algorithm,
-            args        = [target],
+            args        = [alg_group],
             containers  = containers
     )
 
@@ -105,7 +126,6 @@ def get_type(container):
             container = container[0]
         return type(container)
 
-import inspect
 def get_function(target, function=None, args=None, kwargs=None, containers=None):
 
     if args is None: args = []
@@ -120,24 +140,42 @@ def get_function(target, function=None, args=None, kwargs=None, containers=None)
 
     # partially apply function with container arguments
     if function is not None:
-        return partial(
-                getattr(module, function), 
-                **{i: c.container for i, c in containers.items()}
+        return curry(getattr(module, function))(
+            **{i: c.container for i, c in containers.items()}
         )
 
     else: return module
 
-def typecheck(function):
+def type_check(function):
     def _f(*args):
         args = list(args)
-        print(inspect.getfullargspec(function)[0])
+        #print(inspect.getfullargspec(function)[0])
         for i, arg in enumerate(inspect.getfullargspec(function)[0]):
-            while not isinstance(args[i], function.__annotations__[arg]):
-                try:
-                    args[i] = args[i].evaluated
-                except:
-                    raise TypeError("{} is not of type {}".format(args[i], arg))
+            if arg == 'self': continue
+        #    print(function.__annotations__[arg])
+        #    print(type(function.__annotations__[arg]))
+        #    while not isinstance(args[i], function.__annotations__[arg]):
+        #        try:
+        #            args[i] = args[i].evaluated
+        #        except:
+        #            raise TypeError("{} is not of type {}".format(args[i], arg))
         return function(*args)
     _f.__doc__ = function.__doc__
     return _f
     
+def dim_check(function):
+    def _f(operator, A, B, *args):
+        #print(args)
+        if function.__name__.startswith("eWise") and A.shape != B.shape:
+            raise Exception("dimensions of {} and {} must match".format(A, B))
+        elif function.__name__ == "mxm" and A.shape[1] != B.shape[0]:
+            raise Exception("columns of {} must be the same as rows of {}".format(A, B))
+        elif function.__name__ == "mxv" and A.shape[1] != B.shape[0]:
+            raise Exception("columns of {} must be the same as length of {}".format(A, B))
+        elif function.__name__ == "vxm" and A.shape[0] != B.shape[0]:
+            raise Exception("rows of {} must be the same as length of {}".format(A, B))
+
+        return function(operator, A, B, *args)
+    _f.__doc__ = function.__doc__
+    return _f
+

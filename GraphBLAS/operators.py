@@ -83,6 +83,10 @@ class _Expression(ABC):
         return self._evaluated
 
     @property
+    def container(self):
+        return self.evaluated.container
+
+    @property
     def dtype(self):
         return self.evaluated.dtype
 
@@ -211,27 +215,35 @@ class Semiring(ContextDecorator):
 
     # mask and replace are configured at evaluation by C param
     # accum is optionally configured at evaluation
+    @c.dim_check
     def eWiseAddMatrix(self, A, B, C=None, accum=None):
         return self.partial("eWiseAddMatrix", A, B, C, accum)
 
+    @c.dim_check
     def eWiseAddVector(self, A, B, C=None, accum=None):
         return self.partial("eWiseAddVector", A, B, C, accum)
 
+    @c.dim_check
     def dot(self, A, B, C=None, accum=None):
         pass
 
+    @c.dim_check
     def eWiseMultMatrix(self, A, B, C=None, accum=None):
         return self.partial("eWiseMultMatrix", A, B, C, accum)
 
+    @c.dim_check
     def eWiseMultVector(self, A, B, C=None, accum=None):
         return self.partial("eWiseMultVector", A, B, C, accum)
 
+    @c.dim_check
     def mxm(self, A, B, C=None, accum=None):
         return self.partial("mxm", A, B, C, accum)
 
+    @c.dim_check
     def mxv(self, A, B, C=None, accum=None):
         return self.partial("mxv", A, B, C, accum)
 
+    @c.dim_check
     def vxm(self, A, B, C=None, accum=None):
         return self.partial("vxm", A, B, C, accum)
 
