@@ -39,7 +39,9 @@ PYEXT       = (
 
 def get_module(target, args, kwargs):
 
-    module = zlib.adler32("t{}a{}k{}".format(target, args, kwargs).encode("utf-8"))
+    module = zlib.adler32(
+            "t{}a{}k{}".format(target, args, kwargs).encode("utf-8")
+    )
 #   module = hashlib.md5(str(args).encode("utf-8")).hexdigest()
 
     try:
@@ -59,7 +61,8 @@ def get_module(target, args, kwargs):
             *OPTS.split(),
             *FLAGS.split(),
             *PYBIND.split(),
-            #PICKY, DEBUG,
+            #PICKY,
+            #DEBUG,
             *PROJECT.split(),
             "-MT", "graphblas{pyext}".format(pyext=PYEXT),
             *"-MD -MP -MF".split(),
@@ -80,14 +83,14 @@ def get_module(target, args, kwargs):
                     for kw, a in kwargs
             )
     ]
-    print(cmd)
+    print(" ".join(cmd[:2] + cmd[24:]))
     subprocess.call(cmd, cwd=C_CODE)
 
     return importlib.import_module(
             "GraphBLAS.modules.{mod}".format(mod=module)
     )
 
-# decorator class that caches modules in dictionary attached to function
+# dictionary that fetches missing modules by calling get_module()
 class Cache(dict):
 
     def __init__(self):
@@ -101,14 +104,14 @@ class Cache(dict):
         module = dict.__getitem__(self, (
             target,
             tuple(sorted(args)), 
-            tuple(sorted(kwargs))
+            tuple(sorted(kwargs.items()))
         ))
 
         return module
 
     def __missing__(self, args):
         self[args] = get_module(*args)
-        return self[args]
+        return dict.__getitem__(self, args)
             
 cache = Cache()
 

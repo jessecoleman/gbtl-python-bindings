@@ -11,29 +11,29 @@ using namespace pybind11::literals;
 // left type
 #if defined(A_MATRIX)
 typedef GraphBLAS::Matrix<A_TYPE> AMatrixT;
-#elif defined(A_VECTOR)
-typedef GraphBLAS::Vector<A_TYPE> UVectorT;
 #elif defined(A_MATRIXCOMPLEMENT)
 typedef GraphBLAS::MatrixComplementView<GraphBLAS::Matrix<A_TYPE>> AMatrixT;
-#elif defined(A_VECTORCOMPLEMENT)
-typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<A_TYPE>> UVectorT;
 #elif defined(A_MATRIXTRANSPOSE)
 typedef GraphBLAS::TransposeView<GraphBLAS::Matrix<A_TYPE>> AMatrixT;
+#elif defined(A_VECTOR)
+typedef GraphBLAS::Vector<A_TYPE> UVectorT;
+#elif defined(A_VECTORCOMPLEMENT)
+typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<A_TYPE>> UVectorT;
 #elif defined(A_VALUE)
-typedef A_TYPE AValueT
+typedef A_TYPE AValueT;
 #endif
 
 // right type
 #if defined(B_MATRIX)
 typedef GraphBLAS::Matrix<B_TYPE> BMatrixT;
-#elif defined(B_VECTOR)
-typedef GraphBLAS::Vector<B_TYPE> VVectorT;
 #elif defined(B_MATRIXCOMPLEMENT)
 typedef GraphBLAS::MatrixComplementView<GraphBLAS::Matrix<B_TYPE>> BMatrixT;
-#elif defined(B_VECTORCOMPLEMENT)
-typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<B_TYPE>> VVectorT;
 #elif defined(B_MATRIXTRANSPOSE)
 typedef GraphBLAS::TransposeView<GraphBLAS::Matrix<B_TYPE>> BMatrixT;
+#elif defined(B_VECTOR)
+typedef GraphBLAS::Vector<B_TYPE> VVectorT;
+#elif defined(B_VECTORCOMPLEMENT)
+typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<B_TYPE>> VVectorT;
 #endif
 
 // out type
@@ -48,14 +48,14 @@ typedef C_TYPE CValueT;
 // mask type
 #if defined(M_MATRIX)
 typedef GraphBLAS::Matrix<M_TYPE> MMatrixT;
-#elif defined(M_VECTOR)
-typedef GraphBLAS::Vector<M_TYPE> MVectorT;
 #elif defined(M_MATRIXCOMPLEMENT)
 typedef GraphBLAS::MatrixComplementView<GraphBLAS::Matrix<M_TYPE>> MMatrixT;
-#elif defined(M_VECTORCOMPLEMENT)
-typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<M_TYPE>> MVectorT;
 #elif defined(M_MATRIXTRANSPOSE)
 typedef GraphBLAS::TransposeView<GraphBLAS::Matrix<M_TYPE>> MMatrixT;
+#elif defined(M_VECTOR)
+typedef GraphBLAS::Vector<M_TYPE> MVectorT;
+#elif defined(M_VECTORCOMPLEMENT)
+typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<M_TYPE>> MVectorT;
 #elif defined(M_NOMASK)
 typedef GraphBLAS::NoMask MMatrixT;
 typedef GraphBLAS::NoMask MVectorT;
@@ -247,7 +247,7 @@ void extractVector(
     )
 { extract(C, M, AccumT(), A, indices, replace_flag); }
 
-#elif defined(ASSIGN) && defined(C_MATRIX) && defined(ROW_INDICES) && defined(COL_INDICES)
+#elif defined(ASSIGN) && defined(C_MATRIX) && defined(A_MATRIX) && defined(ROW_INDICES) && defined(COL_INDICES)
 void assignMatrix(
         CMatrixT &C,
         MMatrixT const &M,
@@ -258,7 +258,7 @@ void assignMatrix(
     )
 { assign(C, M, AccumT(), A, row_indices, col_indices, replace_flag); }
 
-#elif defined(ASSIGN) && defined(C_MATRIX) && defined(ROW_INDICES) && defined(COL_INDEX)
+#elif defined(ASSIGN) && defined(C_MATRIX) && defined(A_MATRIX) && defined(ROW_INDICES) && defined(COL_INDEX)
 void assignMatrixCol(
         CMatrixT &C,
         MMatrixT const &M,
@@ -269,7 +269,7 @@ void assignMatrixCol(
     )
 { assign(C, M, AccumT(), A, row_indices, col_index, replace_flag); }
 
-#elif defined(ASSIGN) && defined(C_MATRIX) && defined(ROW_INDEX) && defined(COL_INDICES)
+#elif defined(ASSIGN) && defined(C_MATRIX) && defined(A_MATRIX) && defined(ROW_INDEX) && defined(COL_INDICES)
 void assignMatrixRow(
         CMatrixT &C,
         MMatrixT const &M,
@@ -280,7 +280,7 @@ void assignMatrixRow(
     )
 { assign(C, M, AccumT(), A, row_index, col_indices, replace_flag); }
 
-#elif defined(ASSIGN) && defined(C_MATRIX) && defined(VAL)
+#elif defined(ASSIGN) && defined(C_MATRIX) && defined(A_VALUE)
 void assignMatrixConst(
         CMatrixT &C,
         MMatrixT const &M,
@@ -291,7 +291,7 @@ void assignMatrixConst(
     )
 { assign(C, M, AccumT(), A, row_indices, col_indices, replace_flag); }
 
-#elif defined(ASSIGN) && defined(C_VECTOR) && defined(INDICES)
+#elif defined(ASSIGN) && defined(C_VECTOR) && defined(A_VECTOR) && defined(INDICES)
 void assignVector(
         WVectorT &C,
         MVectorT const &M,
@@ -301,7 +301,7 @@ void assignVector(
     )
 { assign(C, M, AccumT(), A, indices, replace_flag); }
 
-#elif defined(ASSIGN) && defined(C_VECTOR) && defined(VAL)
+#elif defined(ASSIGN) && defined(C_VECTOR) && defined(A_VALUE)
 void assignVectorConst(
         WVectorT &C,
         MMatrixT const &M,
@@ -309,7 +309,7 @@ void assignVectorConst(
         SequenceT const &indices,
         bool replace_flag
     )
-{ assign(C, M, AccumT(), A, indices, replace_flag); }
+{ assign(C, M, AccumT(), val, indices, replace_flag); }
 
 #endif
 
@@ -363,17 +363,17 @@ PYBIND11_MODULE(MODULE, m) {
 #elif defined(EXTRACT) && defined(C_VECTOR) && defined(INDICES)
     m.def("extract", &extractVector, "C"_a, "M"_a, "A"_a, "indices"_a, "replace_flag"_a);
 
-#elif defined(ASSIGN) && defined(C_MATRIX) && defined(ROW_INDICES) && defined(COL_INDICES)
+#elif defined(ASSIGN) && defined(C_MATRIX) && defined(A_MATRIX) && defined(ROW_INDICES) && defined(COL_INDICES)
     m.def("assign", &assignMatrix, "C"_a, "M"_a, "A"_a, "row_indices"_a, "col_indices"_a, "replace_flag"_a);
-#elif defined(ASSIGN) && defined(C_MATRIX) && defined(ROW_INDICES) && defined(COL_INDEX)
+#elif defined(ASSIGN) && defined(C_MATRIX) && defined(A_MATRIX) && defined(ROW_INDICES) && defined(COL_INDEX)
     m.def("assign", &assignMatrixCol, "C"_a, "M"_a, "A"_a, "row_indices"_a, "col_index"_a, "replace_flag"_a);
-#elif defined(ASSIGN) && defined(C_MATRIX) && defined(ROW_INDEX) && defined(COL_INDICES)
+#elif defined(ASSIGN) && defined(C_MATRIX) && defined(A_MATRIX) && defined(ROW_INDEX) && defined(COL_INDICES)
     m.def("assign", &assignMatrixRow, "C"_a, "M"_a, "A"_a, "row_index"_a, "col_indices"_a, "replace_flag"_a);
-#elif defined(ASSIGN) && defined(C_MATRIX) && defined(VAL)
+#elif defined(ASSIGN) && defined(C_MATRIX) && defined(A_VALUE)
     m.def("assign", &assignMatrixConst, "C"_a, "M"_a, "A"_a, "row_indices"_a, "col_indices"_a, "replace_flag"_a);
-#elif defined(ASSIGN) && defined(C_VECTOR) && defined(INDICES)
+#elif defined(ASSIGN) && defined(C_VECTOR) && defined(A_VECTOR) && defined(INDICES)
     m.def("assign", &assignVector, "C"_a, "M"_a, "A"_a, "indices"_a, "replace_flag"_a);
-#elif defined(ASSIGN) && defined(C_VECTOR) && defined(VAL)
+#elif defined(ASSIGN) && defined(C_VECTOR) && defined(A_VALUE)
     m.def("assign", &assignVectorConst, "C"_a, "M"_a, "A"_a, "indices"_a, "replace_flag"_a);
 
 #endif

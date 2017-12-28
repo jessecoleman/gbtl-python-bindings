@@ -33,8 +33,41 @@ def container(dtype):
 
     return get_function(
             target = "containers", 
-            kwargs = [("dtype", types[dtype])]
+            kwargs = {"dtype": types[dtype]}
     )
+
+def operator(function, accum=None, operation=None, replace_flag=None, **containers):
+
+    args = [function]
+    kwargs = {}
+
+    if operation is not None:
+
+        args.append(type(operation).__name__)
+        operators = operation.__dict__
+
+        # set default min identity
+        if operators.get("identity", None) == "MinIdentity":
+            args.append("min_identity")
+
+        kwargs.update(operators)
+
+    # set default accumulate operator
+    if accum is None:
+        args.append("no_accum")
+    else:
+        kwargs["accum_binaryop"] = accum.binary_op
+
+    f = get_function(
+            target      = "operators",
+            function    = function,
+            args        = args,
+            kwargs      = kwargs,
+            containers  = containers
+    )
+
+    if replace_flag is None: return f
+    else: return f(replace_flag=replace_flag)
 
 algorithm_dict = {
         "bfs": "bfs",
@@ -69,44 +102,10 @@ def algorithm(algorithm, **containers):
             containers  = containers
     )
 
-def operator(function, accum=None, operation=None, replace_flag=None, **containers):
-
-    args = [function]
-    kwargs = []
-
-    if operation is not None:
-
-        args.append(type(operation).__name__)
-        operators = operation.__dict__
-
-        # set default min identity
-        if operators.get("identity", None) == "MinIdentity":
-            args.append("min_identity")
-
-        kwargs.extend(operators.items())
-
-    # set default accumulate operator
-    if accum == "NoAccumulate":
-        args.append("no_accum")
-    else:
-        kwargs.append(("accum_binaryop", str(accum)))
-
-    f = get_function(
-            target      = "operators",
-            function    = function,
-            args        = args,
-            kwargs      = kwargs,
-            containers  = containers
-    )
-
-    # TODO temporary fix for reduce
-    if replace_flag is not None:
-        return f(replace_flag=replace_flag)
-
 def utilities(function, args=None, kwargs=None, **containers):
 
     return get_function(
-            target      = "utilities", 
+            target      = "utilities",
             function    = function,
             args        = args,
             kwargs      = kwargs,
@@ -134,33 +133,34 @@ def get_type(container):
 def get_function(target, function=None, args=None, kwargs=None, containers=None):
 
     if args is None: args = []
-    if kwargs is None: kwargs = []
+    if kwargs is None: kwargs = {}
 
     if containers is not None:
         for i, c in containers.items():
             # if c is container
             if hasattr(c, "dtype"):
-                kwargs.append((i + "_type", types[c.dtype]))
+                kwargs[i + "_type"] = types[c.dtype]
                 args.append(i + "_" + type(c).__name__)
             # if c is value
             elif type(c) in types:
-                kwargs.append((i + "_type", types[type(c)]))
+                kwargs[i + "_type"] = types[type(c)]
                 args.append(i + "_value")
             # if c is index list
             else:
-                kwargs.append((i + "_type", types[get_type(c)]))
+                kwargs[i + "_type"] = types[get_type(c)]
                 args.append(i)
 
     module = c_mod.cache[target, args, kwargs]
 
     # partially apply function with container arguments
     if function is not None:
-        return curry(getattr(module, function))(
-                **{i: (c.container if hasattr(c, "container") else c) 
-                for i, c in containers.items()}
-        )
+        return curry(getattr(module, function))(**{
+                i: (c.container if hasattr(c, "container") else c) 
+                for i, c in containers.items()
+        })
 
-    else: return module
+    else:
+        return module
 
 def type_check(function):
     def _f(*args):

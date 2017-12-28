@@ -14,7 +14,7 @@ class Matrix(object):
         if m is None and (shape is None or dtype is None):
             raise ValueError("Please provide matrix or shape and dtype")
 
-        # copy constructor, no compilation needed
+        # copy constructor
         if isinstance(m, Matrix):
 
             self.dtype = m.dtype
@@ -86,6 +86,9 @@ class Matrix(object):
     def __iadd__(self, expr):
         raise Exception("use {}[:] notation to assign into container".format(type(self)))
 
+    #def __imul__(self, other):
+    #    if type(other) in ops.
+
     def __add__(self, other):
         return ops.eWiseAdd(None, self, other)
 
@@ -130,8 +133,16 @@ class Matrix(object):
    # NOTE if accum is expected, that gets handled in semiring or assign partial expression
     def __setitem__(self, item, value):
 
-        if isinstance(value, ops._Expression):
+        if isinstance(value, tuple):
+            self[item].assign(*value)
+
+        elif isinstance(value, ops._Expression):
             value.eval(self[item])
+
+        # TODO
+        elif isinstance(value, Matrix):
+            pass
+            #self.container = other.
 
         else:
             self[item].assign(value)
@@ -140,7 +151,7 @@ class Matrix(object):
 
     def __iter__(self):
         i, j, v = self.container.extractTuples()
-        return zip(i, j, v).__iter__()
+        return iter(zip(i, j, v))
 
     # returns a new container with the correct output dimensions
     def _out_container(self, other=None):
@@ -314,7 +325,7 @@ class Vector(object):
 
     def __iter__(self):
         i, v = self.container.extractTuples()
-        return zip(i, v).__iter__()
+        return iter(zip(i, v))
 
     # returns a new container with the correct output dimensions
     def _out_container(self, other=None):

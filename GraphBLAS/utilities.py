@@ -17,7 +17,7 @@ def scaled_identity(shape: int, scalar: (int, float)):
 
     return c.utilities(
             function    = "scaled_identity",
-            kwargs      = [("a_type", c.types[type(scalar)])],
+            kwargs      = {"a_type": c.types[type(scalar)]},
     )(mat_size=shape, val=scalar)
 
 @c.type_check

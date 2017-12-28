@@ -50,6 +50,13 @@ class _Op(ABC):
         _ops.remove(self)
         return False
 
+    def __repr__(self):
+        return ("<"
+            + type(self).__name__
+            + " object: {"
+            + ", ".join(("{}: {}".format(k, v) 
+                for k, v in self.__dict__.items()))
+            + "}>")
 
 class UnaryOp(_Op, ContextDecorator):
 
@@ -94,8 +101,6 @@ class Accumulator(BinaryOp, ContextDecorator):
         global _accum
         _accum.pop()
         return False
-
-NoAccumulate = Accumulator("NoAccumulate")
 
 # decorator for expression.eval() to memoize results
 def lazy_eval(func):
@@ -142,6 +147,9 @@ class _Expression(ABC):
     def __repr__(self):
         return str(self.evaluated)
 
+    def __iter__(self):
+        return iter(self.evaluated)
+
 
 # reduce, apply
 class UnaryExpression(_Expression):
@@ -153,7 +161,7 @@ class UnaryExpression(_Expression):
         self.out_shape = out_shape
 
     @lazy_eval
-    def eval(self, out=None, accum=NoAccumulate):
+    def eval(self, out=None, accum=None):
 
         if out is None:
             out = self.A._out_container()
@@ -165,7 +173,7 @@ class UnaryExpression(_Expression):
         c.operator(
             function        = self.f,
             operation       = self.op,
-            accum           = accum.binary_op,
+            accum           = accum,
             replace_flag    = out.replace_flag,
             A               = self.A,
             C               = out.C,
@@ -185,7 +193,7 @@ class BinaryExpression(_Expression):
         self.out_shape = out_shape
 
     @lazy_eval
-    def eval(self, out=None, accum=NoAccumulate):
+    def eval(self, out=None, accum=None):
 
         # TODO fix container construction
         if out is None:
@@ -198,7 +206,7 @@ class BinaryExpression(_Expression):
         c.operator(
             function        = self.f,
             operation       = self.op,
-            accum           = accum.binary_op,
+            accum           = accum,
             replace_flag    = out.replace_flag,
             A               = self.A,
             B               = self.B,
@@ -216,7 +224,7 @@ class ReduceExpression(_Expression):
         self.A = A
 
     @lazy_eval
-    def eval(self, out, accum=NoAccumulate):
+    def eval(self, out=None, accum=None):
 
         # if out is not masked, apply NoMask
         try: out = out[:]
@@ -226,7 +234,7 @@ class ReduceExpression(_Expression):
 
         # reduce to a scalar
         if out is None:
-            containers["C"] = self.reduce.add_identity
+            containers["C"] = self.reduce.identity
             replace_flag = None
 
         elif isinstance(out, int):
@@ -241,7 +249,7 @@ class ReduceExpression(_Expression):
         result = c.operator(
                 function        = "reduce",
                 operation       = self.reduce,
-                accum           = accum.binary_op,
+                accum           = accum,
                 replace_flag    = replace_flag,
                 **containers
         )
@@ -260,10 +268,11 @@ class MaskedExpression(_Expression):
 
     def __init__(self, C, *mask):
 
-        self.idx = dict()
-        self.C = C
-        self.M = self.NoMask()
+        # if assigning into matrix, use M
+        # if extracting from matrix, use idx
 
+        self.C = C
+        self.idx = dict()
         self.replace_flag = False
 
         # TODO only allow replace with mask, not slice
@@ -272,16 +281,21 @@ class MaskedExpression(_Expression):
         if len(mask) > 0 and type(mask[-1]) is bool:
             *mask, self.replace_flag = mask
 
-        # container mask
+        # container mask (only works on LHS)
         if len(mask) == 1 and hasattr(mask[0], "container"):
             self.M = mask
 
-        elif mask == (slice(None, None, None),):
+        if mask == (slice(None, None, None),):
             self.M = self.NoMask()
 
-        # slice or number index
-        elif len(mask) == len(C.shape):
+            # convert 1D index to 2D
+            if len(C.shape) == 2:
+                mask = (*mask, *mask)
 
+        # slice or number index
+        if len(mask) == len(C.shape):
+
+            # element accessor
             if all(isinstance(i, int) for i in mask):
                 self.idx["index"] = mask
 
@@ -297,7 +311,7 @@ class MaskedExpression(_Expression):
 
                 for i, s, d in zip(mask, C.shape, ("row", "col")):
                     if isinstance(i, slice): 
-                        self.idx[d + "_indices"] = list(range(*i.indices(s)))
+                        self.idx[d + "_indices"] = range(*i.indices(s))
 
                     elif isinstance(i, (list, np.array)):
                         self.idx[d + "_indices"] = i
@@ -311,35 +325,61 @@ class MaskedExpression(_Expression):
         elif len(mask) > 0:
             raise TypeError("Mask must be boolean Matrix or 2D slice with optional replace flag")
 
-    def applyMask(self, rows, cols):
-        i, j = (zip(*product(rows, cols)))
+    # converts row/col indices into matrix mask
+    @property
+    def M(self):
+        # if mask is set
+        if hasattr(self, "_M"):
+            return self._M
+        
+        # if indices are set
+        try:
+            rows = self.idx["row_indices"]
+            cols = self.idx["col_indices"]
 
-        # TODO
-        self.idx["M"] = type(self.C)(
-                ([True] * len(i), (i, j)), 
-                shape=self.C.shape, 
-                dtype=bool
-        )
+            i, j = zip(*product(rows, cols))
+
+            # TODO
+            self._M = type(self.C)(
+                    ([True] * len(i), (i, j)), 
+                    shape=self.C.shape, 
+                    dtype=bool
+            )
+
+        # if no mask
+        except:
+            self._M = self.NoMask()
+        
+        return self._M
+
+    @M.setter
+    def M(self, M):
+        self._M = M
 
     # TODO fix broken shit
     def __iadd__(self, other):
 
-        if isinstance(other, _Expression):
-            return other.eval(self, _accum[-1])
+        return (other, _accum[-1])
 
-        else:
-            return apply(Identity, other).eval(self, _accum[-1])
+    # TODO
+    #def __imul__(self, other):
+    #    pass
+
+    @property
+    def shape(self):
+        return self.C.shape
 
     def eval(self):
         return self.extract()
 
     @lazy_eval
-    def extract(self, A=None, accum=NoAccumulate):
+    def extract(self, out=None, accum=None):
 
         if "index" in self.idx:
             return self.C.container.extractElement(*self.idx["index"])
 
-        if A is None:
+        # construct container of correct shape and size to extract to
+        if out is None:
             shape = None
 
             if len(self.C.shape) == 1:
@@ -358,35 +398,55 @@ class MaskedExpression(_Expression):
                     )
 
             # TODO construct appropriate container
-            A = type(self.C)(shape=tuple(shape), dtype=self.C.dtype)
+            out = type(self.C)(
+                    shape=shape, 
+                    dtype=self.C.dtype
+            )[:]
 
         result = c.operator(
                 function        = "extract",
-                accum           = accum.binary_op,
+                accum           = accum,
                 replace_flag    = self.replace_flag,
-                C               = A,
-                M               = self.M,
+                C               = out.C,
+                M               = out.M,
                 A               = self.C,
                 **self.idx
         )
 
-        return A
+        return out.C
                     
     @lazy_eval
-    def assign(self, A, accum=NoAccumulate):
+    def assign(self, assign, accum=None):
 
-        if isinstance(A, self.C.dtype) and "index" in self.idx:
-            self.C.container.setElement(*self.idx["index"])
-            return
+        if isinstance(assign, self.C.dtype):
+
+            # element setter
+            if "index" in self.idx:
+                self.C.container.setElement(*self.idx["index"], assign)
+                return
+
+            # constant assignment to indices
+            else:
+                A = assign
+                # full index
+                idx = self.C[:].idx
+
+        else:
+            # if assigning un-indexed container
+            if not isinstance(assign, MaskedExpression):
+                assign = assign[:]
+
+            A = assign.C
+            idx = assign.idx
 
         c.operator(
                 "assign",
                 replace_flag    = self.replace_flag,
-                accum           = accum.binary_op,
+                accum           = accum,
                 C               = self.C,
                 M               = self.M,
                 A               = A,
-                **self.idx
+                **idx
         )
 
         return self.C
@@ -456,7 +516,7 @@ def apply(unary_op, A):
 @operator_type(Monoid)
 def reduce(monoid, A):
 
-    return ReduceExpression("reduce", monoid, A)
+    return ReduceExpression(monoid, A)
 
 
 # TODO
