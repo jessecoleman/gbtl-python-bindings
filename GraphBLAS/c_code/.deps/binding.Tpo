@@ -1,5 +1,5 @@
 graphblas.cpython-35m-x86_64-linux-gnu.so: \
- /home/jessecoleman/graphpack/gbtl/gbtl-python-bindings/GraphBLAS/c_code/binding_algorithms.cpp \
+ /home/jessecoleman/graphpack/gbtl/gbtl-python-bindings/GraphBLAS/c_code/binding_nomask.cpp \
  /usr/include/stdc-predef.h \
  /home/jessecoleman/.local/include/python3.5m/pybind11/pybind11.h \
  /home/jessecoleman/.local/include/python3.5m/pybind11/attr.h \
@@ -215,13 +215,11 @@ graphblas.cpython-35m-x86_64-linux-gnu.so: \
  /home/jessecoleman/.local/include/python3.5m/pybind11/options.h \
  /home/jessecoleman/.local/include/python3.5m/pybind11/detail/class.h \
  /home/jessecoleman/.local/include/python3.5m/pybind11/detail/init.h \
- /home/jessecoleman/.local/include/python3.5m/pybind11/stl.h \
- /usr/include/c++/5/set /usr/include/c++/5/bits/stl_tree.h \
- /usr/include/c++/5/bits/stl_set.h /usr/include/c++/5/bits/stl_multiset.h \
- /usr/include/c++/5/map /usr/include/c++/5/bits/stl_map.h \
- /usr/include/c++/5/bits/stl_multimap.h /usr/include/c++/5/iostream \
- /usr/include/c++/5/ostream /usr/include/c++/5/ios \
- /usr/include/c++/5/bits/ios_base.h \
+ /home/jessecoleman/graphpack/gbtl/src/graphblas/graphblas.hpp \
+ /home/jessecoleman/graphpack/gbtl/src/graphblas/detail/config.hpp \
+ /home/jessecoleman/graphpack/gbtl/src/graphblas/types.hpp \
+ /usr/include/c++/5/iostream /usr/include/c++/5/ostream \
+ /usr/include/c++/5/ios /usr/include/c++/5/bits/ios_base.h \
  /usr/include/c++/5/bits/locale_classes.h \
  /usr/include/c++/5/bits/locale_classes.tcc \
  /usr/include/c++/5/system_error \
@@ -236,13 +234,15 @@ graphblas.cpython-35m-x86_64-linux-gnu.so: \
  /usr/include/c++/5/bits/locale_facets.tcc \
  /usr/include/c++/5/bits/basic_ios.tcc \
  /usr/include/c++/5/bits/ostream.tcc /usr/include/c++/5/istream \
- /usr/include/c++/5/bits/istream.tcc /usr/include/c++/5/list \
- /usr/include/c++/5/bits/stl_list.h /usr/include/c++/5/bits/list.tcc \
- /usr/include/c++/5/valarray /usr/include/c++/5/cmath \
+ /usr/include/c++/5/bits/istream.tcc \
+ /home/jessecoleman/graphpack/gbtl/src/graphblas/exceptions.hpp \
+ /usr/include/c++/5/sstream /usr/include/c++/5/bits/sstream.tcc \
+ /home/jessecoleman/graphpack/gbtl/src/graphblas/detail/logging.h \
+ /home/jessecoleman/graphpack/gbtl/src/graphblas/algebra.hpp \
  /usr/include/c++/5/algorithm /usr/include/c++/5/bits/stl_algo.h \
  /usr/include/c++/5/bits/algorithmfwd.h \
  /usr/include/c++/5/bits/stl_heap.h /usr/include/c++/5/random \
- /usr/include/c++/5/bits/random.h \
+ /usr/include/c++/5/cmath /usr/include/c++/5/bits/random.h \
  /usr/include/c++/5/bits/uniform_int_dist.h \
  /usr/include/x86_64-linux-gnu/c++/5/bits/opt_random.h \
  /usr/lib/gcc/x86_64-linux-gnu/5/include/x86intrin.h \
@@ -300,24 +300,6 @@ graphblas.cpython-35m-x86_64-linux-gnu.so: \
  /usr/lib/gcc/x86_64-linux-gnu/5/include/mwaitxintrin.h \
  /usr/include/c++/5/bits/random.tcc /usr/include/c++/5/numeric \
  /usr/include/c++/5/bits/stl_numeric.h \
- /usr/include/c++/5/bits/valarray_array.h \
- /usr/include/c++/5/bits/valarray_array.tcc \
- /usr/include/c++/5/bits/valarray_before.h \
- /usr/include/c++/5/bits/slice_array.h \
- /usr/include/c++/5/bits/valarray_after.h \
- /usr/include/c++/5/bits/gslice.h /usr/include/c++/5/bits/gslice_array.h \
- /usr/include/c++/5/bits/mask_array.h \
- /usr/include/c++/5/bits/indirect_array.h \
- /usr/include/c++/5/experimental/optional \
- /usr/include/c++/5/bits/enable_special_members.h \
- /home/jessecoleman/.local/include/python3.5m/pybind11/operators.h \
- /home/jessecoleman/graphpack/gbtl/src/graphblas/graphblas.hpp \
- /home/jessecoleman/graphpack/gbtl/src/graphblas/detail/config.hpp \
- /home/jessecoleman/graphpack/gbtl/src/graphblas/types.hpp \
- /home/jessecoleman/graphpack/gbtl/src/graphblas/exceptions.hpp \
- /usr/include/c++/5/sstream /usr/include/c++/5/bits/sstream.tcc \
- /home/jessecoleman/graphpack/gbtl/src/graphblas/detail/logging.h \
- /home/jessecoleman/graphpack/gbtl/src/graphblas/algebra.hpp \
  /home/jessecoleman/graphpack/gbtl/src/graphblas/Matrix.hpp \
  /home/jessecoleman/graphpack/gbtl/src/graphblas/detail/param_unpack.hpp \
  /home/jessecoleman/graphpack/gbtl/src/graphblas/detail/matrix_tags.hpp \
@@ -354,8 +336,7 @@ graphblas.cpython-35m-x86_64-linux-gnu.so: \
  /home/jessecoleman/graphpack/gbtl/src/graphblas/system/sequential/sparse_reduce.hpp \
  /home/jessecoleman/graphpack/gbtl/src/graphblas/system/sequential/sparse_transpose.hpp \
  /home/jessecoleman/graphpack/gbtl/src/graphblas/matrix_utils.hpp \
- /home/jessecoleman/graphpack/gbtl/src/graphblas/system/sequential/sequential.hpp \
- /home/jessecoleman/graphpack/gbtl/src/algorithms/triangle_count.hpp
+ /home/jessecoleman/graphpack/gbtl/src/graphblas/system/sequential/sequential.hpp
 
 /usr/include/stdc-predef.h:
 
@@ -923,21 +904,11 @@ graphblas.cpython-35m-x86_64-linux-gnu.so: \
 
 /home/jessecoleman/.local/include/python3.5m/pybind11/detail/init.h:
 
-/home/jessecoleman/.local/include/python3.5m/pybind11/stl.h:
+/home/jessecoleman/graphpack/gbtl/src/graphblas/graphblas.hpp:
 
-/usr/include/c++/5/set:
+/home/jessecoleman/graphpack/gbtl/src/graphblas/detail/config.hpp:
 
-/usr/include/c++/5/bits/stl_tree.h:
-
-/usr/include/c++/5/bits/stl_set.h:
-
-/usr/include/c++/5/bits/stl_multiset.h:
-
-/usr/include/c++/5/map:
-
-/usr/include/c++/5/bits/stl_map.h:
-
-/usr/include/c++/5/bits/stl_multimap.h:
+/home/jessecoleman/graphpack/gbtl/src/graphblas/types.hpp:
 
 /usr/include/c++/5/iostream:
 
@@ -983,15 +954,15 @@ graphblas.cpython-35m-x86_64-linux-gnu.so: \
 
 /usr/include/c++/5/bits/istream.tcc:
 
-/usr/include/c++/5/list:
+/home/jessecoleman/graphpack/gbtl/src/graphblas/exceptions.hpp:
 
-/usr/include/c++/5/bits/stl_list.h:
+/usr/include/c++/5/sstream:
 
-/usr/include/c++/5/bits/list.tcc:
+/usr/include/c++/5/bits/sstream.tcc:
 
-/usr/include/c++/5/valarray:
+/home/jessecoleman/graphpack/gbtl/src/graphblas/detail/logging.h:
 
-/usr/include/c++/5/cmath:
+/home/jessecoleman/graphpack/gbtl/src/graphblas/algebra.hpp:
 
 /usr/include/c++/5/algorithm:
 
@@ -1002,6 +973,8 @@ graphblas.cpython-35m-x86_64-linux-gnu.so: \
 /usr/include/c++/5/bits/stl_heap.h:
 
 /usr/include/c++/5/random:
+
+/usr/include/c++/5/cmath:
 
 /usr/include/c++/5/bits/random.h:
 
@@ -1121,46 +1094,6 @@ graphblas.cpython-35m-x86_64-linux-gnu.so: \
 
 /usr/include/c++/5/bits/stl_numeric.h:
 
-/usr/include/c++/5/bits/valarray_array.h:
-
-/usr/include/c++/5/bits/valarray_array.tcc:
-
-/usr/include/c++/5/bits/valarray_before.h:
-
-/usr/include/c++/5/bits/slice_array.h:
-
-/usr/include/c++/5/bits/valarray_after.h:
-
-/usr/include/c++/5/bits/gslice.h:
-
-/usr/include/c++/5/bits/gslice_array.h:
-
-/usr/include/c++/5/bits/mask_array.h:
-
-/usr/include/c++/5/bits/indirect_array.h:
-
-/usr/include/c++/5/experimental/optional:
-
-/usr/include/c++/5/bits/enable_special_members.h:
-
-/home/jessecoleman/.local/include/python3.5m/pybind11/operators.h:
-
-/home/jessecoleman/graphpack/gbtl/src/graphblas/graphblas.hpp:
-
-/home/jessecoleman/graphpack/gbtl/src/graphblas/detail/config.hpp:
-
-/home/jessecoleman/graphpack/gbtl/src/graphblas/types.hpp:
-
-/home/jessecoleman/graphpack/gbtl/src/graphblas/exceptions.hpp:
-
-/usr/include/c++/5/sstream:
-
-/usr/include/c++/5/bits/sstream.tcc:
-
-/home/jessecoleman/graphpack/gbtl/src/graphblas/detail/logging.h:
-
-/home/jessecoleman/graphpack/gbtl/src/graphblas/algebra.hpp:
-
 /home/jessecoleman/graphpack/gbtl/src/graphblas/Matrix.hpp:
 
 /home/jessecoleman/graphpack/gbtl/src/graphblas/detail/param_unpack.hpp:
@@ -1240,5 +1173,3 @@ graphblas.cpython-35m-x86_64-linux-gnu.so: \
 /home/jessecoleman/graphpack/gbtl/src/graphblas/matrix_utils.hpp:
 
 /home/jessecoleman/graphpack/gbtl/src/graphblas/system/sequential/sequential.hpp:
-
-/home/jessecoleman/graphpack/gbtl/src/algorithms/triangle_count.hpp:

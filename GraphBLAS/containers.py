@@ -6,16 +6,10 @@ from . import c_functions as c
 from . import operators as ops
 
 
-@attrs(cmp=False)
-class NoMask(object):
-
-    container   = attrib(default=c.no_mask())
-    dtype       = attrib(default=None)
-
-
 class Matrix(object):
 
     def __init__(self, m=None, shape=None, dtype=None, copy=True):
+
         # require matrix or shape and type
         if m is None and (shape is None or dtype is None):
             raise ValueError("Please provide matrix or shape and dtype")
@@ -46,27 +40,27 @@ class Matrix(object):
             d = m.tocoo(copy=False)
             self.shape = d.shape
             self.container = module.init_sparse_matrix(
-                    self.shape[0], self.shape[1],
-                    d.row, d.col, d.data
+                    *self.shape, d.row, d.col, d.data
             )
 
         # construct from tuple of arrays (data, (rows, cols))
         elif isinstance(m, tuple) and len(m) == 2:
             data, idx = m
             row_idx, col_idx = idx
-            if shape is not None: self.shape = shape
-            else: self.shape = (max(row_idx) + 1, max(col_idx) + 1)
+            if shape is not None: 
+                self.shape = shape
+            else: 
+                self.shape = (max(row_idx) + 1, max(col_idx) + 1)
+
             self.container = module.init_sparse_matrix(
-                    self.shape[0], self.shape[1],
-                    row_idx, col_idx, data
+                    *self.shape, row_idx, col_idx, data
             )
 
         # construct empty matrix from shape and dtype
         else:
             self.shape = shape
             self.container = module.init_sparse_matrix(
-                    self.shape[0], self.shape[1],
-                    [], [], []
+                    *self.shape, [], [], []
             )
 
     def __repr__(self):
@@ -92,37 +86,29 @@ class Matrix(object):
     def __iadd__(self, expr):
         raise Exception("use {}[:] notation to assign into container".format(type(self)))
 
-    #@c.type_check
-    def __add__(self, other: 'Matrix'):
-        return ops.semiring.eWiseAddMatrix(self, other)
+    def __add__(self, other):
+        return ops.eWiseAdd(None, self, other)
 
-    #@c.type_check
-    def __radd__(self, other: 'Matrix'):
-        return ops.semiring.eWiseAddMatrix(other, self)
+    def __radd__(self, other):
+        return ops.eWiseAdd(None, other, self)
 
-    #@c.type_check
-    def __mul__(self, other: 'Matrix'):
-        return ops.semiring.eWiseMultMatrix(self, other)
+    def __mul__(self, other):
+        return ops.eWiseMult(None, self, other)
 
-    #@c.type_check
-    def __rmul__(self, other: 'Matrix'):
-        return ops.semiring.eWiseMultMatrix(other, self)
+    def __rmul__(self, other):
+        return ops.eWiseMult(None, other, self)
 
-    # TODO type unions
-    #@c.type_check
-    def __matmul__(self, other: 'Matrix'):
+    def __matmul__(self, other):
         if isinstance(other, Matrix):
-            return ops.semiring.mxm(self, other)
+            return ops.mxm(None, self, other)
         elif isinstance(other, Vector):
-            return ops.semiring.mxv(self, other)
+            return ops.mxv(None, self, other)
 
-    # TODO type unions
-    #@c.type_check
     def __rmatmul__(self, other):
         if isinstance(other, Matrix):
-            return ops.semiring.mxm(other, self)
+            return ops.mxm(None, other, self)
         elif isinstance(other, Vector):
-            return ops.semiring.vxm(other, self)
+            return ops.vxm(None, other, self)
 
     @property
     def T(self):
@@ -134,99 +120,27 @@ class Matrix(object):
     def __neg__(self):
         return ops.AdditiveInverse(self)
 
-    @BoundInnerClass
-    @attrs(cmp=False)
-    class masked(object):
-
-        C               = attrib()
-        M               = attrib(default=NoMask())
-        replace_flag    = attrib(default=False)
-
-        @M.validator
-        def check_mask(self, attribute, value):
-            if not isinstance(value, (Matrix, NoMask)):
-                raise TypeError("Incorrect type for mask parameter")
-
-        def __iadd__(self, other):
-            if isinstance(other, ops.Expression):
-                return other.eval(self, ops.accumulator)
-
-            else:
-                return ops.Identity(other).eval(self, ops.accumulator)
-
-    # applies mask stored in item and returns self
     def __getitem__(self, item):
 
-        # index accessor
-        if all(isinstance(i, int) for i in item) and len(item) == 2:
-            if self.container.hasElement(*item):
-                return self.container.extractElement(*item)
-            else:
-                return ops.semiring.add_identity
+        if type(item) is not tuple:
+            item = (item,)
 
-        mask = None
-        replace_flag = False
+        return ops.MaskedExpression(self, *item)
 
-        if isinstance(item, tuple):
-            # must be 2 slices and bool
-            # self[0:N,0:M,True]
-            if len(item) == 3 and isinstance(item[2], bool):
-                    *item, replace_flag = item
+   # NOTE if accum is expected, that gets handled in semiring or assign partial expression
+    def __setitem__(self, item, value):
 
-            # 2D index or slices or mask and bool
-            # self[1,1] or self[0:N,0:M] or self[M,True]
-            if len(item) == 2:
-                if all(isinstance(s, slice) for s in item):
-                    s_i, s_j = item
-                    item = None
-                    row_idx, col_idx, vals = [], [], []
-                    for i in range(*s_i.indices(self.shape[0])):
-                        for j in range(*s_j.indices(self.shape[0])):
-                            row_idx.append(i)
-                            col_idx.append(j)
-                            vals.append(True)
-
-                    # build mask from slice data
-                    mask = Matrix(
-                            (vals,
-                            (row_idx, col_idx)),
-                            shape=self.shape,
-                            dtype=bool
-                    )
-
-                elif isinstance(item[1], bool):
-                    item, replace_flag = item
-
-        if isinstance(item, bool):
-            replace_flag = item
-
-        elif isinstance(item, Matrix):
-            mask = item
-
-        elif item == slice(None, None, None):
-            mask = None
-
-        elif item is not None:
-            raise TypeError("Mask must be boolean Matrix or 2D slice with optional replace flag")
-
-        return self.masked(mask, replace_flag)
-
-    # NOTE if accum is expected, that gets handled in semiring or assign partial expression
-    def __setitem__(self, item, assign):
-
-        if all(isinstance(i, int) for i in item) and len(item) == 2:
-            self.container.setElement(item, assign)
-
-        elif hasattr(assign, "eval"):
-            self = assign.eval(self[item])
-
-        elif isinstance(assign, Matrix):
-            self = Matrix(assign)
+        if isinstance(value, ops._Expression):
+            value.eval(self[item])
 
         else:
-            raise TypeError("Matrix can be assigned to with integer indices or masks")
+            self[item].assign(value)
 
         return self
+
+    def __iter__(self):
+        i, j, v = self.container.extractTuples()
+        return zip(i, j, v).__iter__()
 
     # returns a new container with the correct output dimensions
     def _out_container(self, other=None):
@@ -323,13 +237,13 @@ class Vector(object):
             if shape is not None: self.shape = shape
             else: self.shape = (max(idx) + 1,)
             self.container = module.init_sparse_vector(
-                    self.shape[0], idx, data
+                    *self.shape, idx, data
             )
 
         else:
             self.shape = shape
             self.container = module.init_sparse_vector(
-                    self.shape[0], [], []
+                    *self.shape, [], []
             )
 
     def __repr__(self):
@@ -357,29 +271,23 @@ class Vector(object):
     def __iadd__(self, expr):
         raise Exception("use {}[:] notation to assign into container".format(type(self)))
 
-    #@c.type_check
-    def __add__(self, other: 'Vector'):
-        return ops.semiring.eWiseAddVector(self, other)
+    def __add__(self, other):
+        return ops.eWiseAdd(None, self, other)
 
-    #@c.type_check
-    def __radd__(self, other: 'Vector'):
-        return ops.semiring.eWiseAddVector(other, self)
+    def __radd__(self, other):
+        return ops.eWiseAdd(None, other, self)
 
-    #@c.type_check
-    def __mul__(self, other: 'Vector'):
-        return ops.semiring.eWiseMultVector(self, other)
+    def __mul__(self, other):
+        return ops.eWiseMult(None, self, other)
 
-    #@c.type_check
-    def __rmul__(self, other: 'Vector'):
-        return ops.semiring.eWiseMultVector(other, self)
+    def __rmul__(self, other):
+        return ops.eWiseMult(None, other, self)
 
-    #@c.type_check
-    def __matmul__(self, other: 'Matrix'):
-        return ops.semiring.vxm(self, other)
+    def __matmul__(self, other):
+        return ops.vxm(None, self, other)
 
-    #@c.type_check
-    def __rmatmul__(self, other: 'Matrix'):
-        return ops.semiring.mxv(other, self)
+    def __rmatmul__(self, other):
+        return ops.mxv(None, other, self)
 
     def __invert__(self):
         return VectorComplement(self)
@@ -387,92 +295,26 @@ class Vector(object):
     def __neg__(self):
         return ops.AdditiveInverse(self)
 
-    @BoundInnerClass
-    @attrs(cmp=False)
-    class masked(object):
-
-        C               = attrib()
-        M               = attrib(default=NoMask())
-        replace_flag    = attrib(default=False)
-
-        @M.validator
-        def check_mask(self, attribute, M):
-            if not isinstance(M, (Vector, NoMask)):
-                raise TypeError("Incorrect type for mask parameter")
-
-        def __iadd__(self, other):
-
-            if isinstance(other, ops.Expression):
-                return other.eval(self, ops.accumulator)
-
-            else:
-                return ops.Identity(other).eval(self, ops.accumulator)
-
     def __getitem__(self, item):
 
-        # index accessor
-        if isinstance(item, int) and not isinstance(item, bool):
-            if self.container.hasElement(item):
-                return self.container.extractElement(item)
-            else:
-                return ops.semiring.add_identity
+        if type(item) is not tuple:
+            item = (item,)
 
-        mask = None
-        replace_flag = False
+        return ops.MaskedExpression(self, *item)
 
-        if isinstance(item, tuple):
-            # self[0:N,True]
-            if len(item) == 2 and isinstance(item[1], bool):
-                *item, replace_flag = item
+    def __setitem__(self, item, value):
 
-            if len(item) == 1:
-                item = item[0]
-
-        if item == slice(None, None, None):
-            mask = None
-
-        elif isinstance(item, slice):
-            idx, vals = [], []
-            for i in range(*item.indices(self.shape[0])):
-                idx.append(i)
-                vals.append(True)
-
-            # build mask from slice data
-            mask = Vector(
-                    (vals, idx),
-                    shape=self.shape,
-                    dtype=bool
-            )
-
-        elif isinstance(item, bool):
-            replace_flag = item
-
-        elif isinstance(item, Vector):
-            mask = item
-
-        elif item is not None:
-            raise TypeError("Mask must be boolean Matrix or 2D slice with optional replace flag")
-
-        return self.masked(mask, replace_flag)
-
-    def __setitem__(self, item, assign):
-
-        # if vector[1] = int
-        if isinstance(assign, int):
-            self.container.setElement(item, assign)
-
-        # if vector[:] = expr
-        elif isinstance(assign, ops.Expression):
-            self = assign.eval(self[item])
-
-        # call copy constructor
-        elif isinstance(assign, Vector):
-            self = Vector(assign)
+        if isinstance(value, ops._Expression):
+            value.eval(self[item])
 
         else:
-            raise TypeError("Vectors can be assigned to with integer indices or masks")
+            self[item].assign(value)
 
         return self
+
+    def __iter__(self):
+        i, v = self.container.extractTuples()
+        return zip(i, v).__iter__()
 
     # returns a new container with the correct output dimensions
     def _out_container(self, other=None):
@@ -502,11 +344,9 @@ class VectorComplement(Vector):
     def __init__(self, vector):
         self.source = vector
         self.container = ~vector.container
-        self.container = self.container
         self.shape = vector.shape
         self.dtype = vector.dtype
 
     def __invert(self):
         return self.source
-
 

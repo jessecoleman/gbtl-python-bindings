@@ -60,8 +60,15 @@ void define_matrix(py::module &m)
         .def("nrows", &MatrixT::nrows)
         .def("ncols", &MatrixT::nrows)
         .def("hasElement", &MatrixT::hasElement)
-        .def("extractElement", &MatrixT::extractElement)
         .def("setElement", &MatrixT::setElement)
+        .def("extractElement", &MatrixT::extractElement)
+        .def("extractTuples", [](MatrixT const &m) {
+                IndexT nnz = m.nvals();
+                IndexArrayT i(nnz), j(nnz);
+                std::vector<ScalarT> v(nnz);
+                m.extractTuples(i, j, v);
+                return py::make_tuple(i, j, v);
+        })
         .def("T", &transpose)
         .def("__invert__", &matrix_complement, py::is_operator())
         .def("__str__", &print<MatrixT>, py::is_operator())
@@ -78,6 +85,13 @@ void define_matrix(py::module &m)
         .def("ncols", &MatrixTransposeT::nrows)
         .def("hasElement", &MatrixTransposeT::hasElement)
         .def("extractElement", &MatrixTransposeT::extractElement)
+        .def("extractTuples", [](MatrixT const &m) {
+                IndexT nnz = m.nvals();
+                IndexArrayT i(nnz), j(nnz);
+                std::vector<ScalarT> v(nnz);
+                m.extractTuples(i, j, v);
+                return py::make_tuple(i, j, v);
+        })
         .def("__str__", print<MatrixTransposeT>);
         //.def("__eq__", [](const MatrixTransposeT &a, const MatrixTransposeT &b) {
         //        return a == b;
@@ -92,6 +106,13 @@ void define_matrix(py::module &m)
         .def("ncols", &MatrixComplementT::nrows)
         .def("hasElement", &MatrixComplementT::hasElement)
         .def("extractElement", &MatrixComplementT::extractElement)
+        .def("extractTuples", [](MatrixT const &m) {
+                IndexT nnz = m.nvals();
+                IndexArrayT i(nnz), j(nnz);
+                std::vector<ScalarT> v(nnz);
+                m.extractTuples(i, j, v);
+                return py::make_tuple(i, j, v);
+        })
         .def("__str__", &print<MatrixComplementT>);
         //.def("__eq__", [](const MatrixComplementT &a, const MatrixComplementT &b) {
         //        return a == b;
@@ -112,8 +133,9 @@ void define_vector(py::module &m)
         .def("nvals", &VectorT::nvals)
         .def("size", &VectorT::size)
         .def("hasElement", &VectorT::hasElement)
-        .def("extractElement", &VectorT::extractElement)
         .def("setElement", &VectorT::setElement)
+        .def("extractElement", &VectorT::extractElement)
+        //.def("extractTuples", &VectorT::extractTuples)
         .def("__invert__", &vector_complement, py::is_operator())
         .def("__str__", &print<VectorT>, py::is_operator());
         //.def("__eq__", [](const VectorT &a, const VectorT &b) {
