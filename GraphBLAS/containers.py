@@ -3,7 +3,6 @@ import numpy as np
 from scipy import sparse
 from .boundinnerclass import BoundInnerClass
 from . import c_functions as c
-from . import operators as ops
 
 
 class Matrix(object):
@@ -83,35 +82,46 @@ class Matrix(object):
     def nvals(self):
         return self.container.nvals()
 
-    def __iadd__(self, expr):
-        raise Exception("use {}[:] notation to assign into container".format(type(self)))
+    def __iadd__(self, const):
+        if isinstance(const, self.dtype):
+            self[:] += const
+            return self
+
+        else:
+            raise TypeError("{} must be of type {}".format(const, self.dtype))
 
     #def __imul__(self, other):
     #    if type(other) in ops.
 
     def __add__(self, other):
-        return ops.eWiseAdd(None, self, other)
+        from .operators import eWiseAdd
+        return eWiseAdd(None, self, other)
 
     def __radd__(self, other):
-        return ops.eWiseAdd(None, other, self)
+        from .operators import eWiseAdd
+        return eWiseAdd(None, other, self)
 
     def __mul__(self, other):
-        return ops.eWiseMult(None, self, other)
+        from .operators import eWiseMult
+        return eWiseMult(None, self, other)
 
     def __rmul__(self, other):
-        return ops.eWiseMult(None, other, self)
+        from .operators import eWiseMult
+        return eWiseMult(None, other, self)
 
     def __matmul__(self, other):
+        from .operators import mxm, mxv
         if isinstance(other, Matrix):
-            return ops.mxm(None, self, other)
+            return mxm(None, self, other)
         elif isinstance(other, Vector):
-            return ops.mxv(None, self, other)
+            return mxv(None, self, other)
 
     def __rmatmul__(self, other):
+        from .operators import mxm, vxm
         if isinstance(other, Matrix):
-            return ops.mxm(None, other, self)
+            return mxm(None, other, self)
         elif isinstance(other, Vector):
-            return ops.vxm(None, other, self)
+            return vxm(None, other, self)
 
     @property
     def T(self):
@@ -121,31 +131,34 @@ class Matrix(object):
         return MatrixComplement(self)
 
     def __neg__(self):
-        return ops.AdditiveInverse(self)
+        from .operators import apply, AdditiveInverse
+        return apply(AdditiveInverse, self)
 
     def __getitem__(self, item):
+        from .expressions import MaskedMatrix
 
         if type(item) is not tuple:
             item = (item,)
 
-        return ops.MaskedExpression(self, *item)
+        return MaskedMatrix(self, *item)
 
-   # NOTE if accum is expected, that gets handled in semiring or assign partial expression
     def __setitem__(self, item, value):
+        from .expressions import _Expression, AccumExpression
 
-        if isinstance(value, tuple):
-            self[item].assign(*value)
+        # if __iadd__
+        if isinstance(value, AccumExpression):
+            from .operators import get_accum
+            self[item].assign(value.expr, get_accum())
 
-        elif isinstance(value, ops._Expression):
+        # if self completes expression, evaluate
+        elif isinstance(value, _Expression):
             value.eval(self[item])
 
-        # TODO
-        elif isinstance(value, Matrix):
-            pass
-            #self.container = other.
+        elif isinstance(value, (Matrix, self.dtype)):
+            self[item].assign(value)
 
         else:
-            self[item].assign(value)
+            raise TypeError("Can't assign {}".format(value))
 
         return self
 
@@ -279,47 +292,69 @@ class Vector(object):
     def __len__(self):
         return self.container.size()
 
-    def __iadd__(self, expr):
-        raise Exception("use {}[:] notation to assign into container".format(type(self)))
+    def __iadd__(self, const):
+        if isinstance(const, self.dtype):
+            self[:] += const
+            return self
+
+        else:
+            raise TypeError("{} must be of type {}".format(const, self.dtype))
+
 
     def __add__(self, other):
-        return ops.eWiseAdd(None, self, other)
+        from .operators import eWiseAdd
+        return eWiseAdd(None, self, other)
 
     def __radd__(self, other):
-        return ops.eWiseAdd(None, other, self)
+        from .operators import eWiseAdd
+        return eWiseAdd(None, other, self)
 
     def __mul__(self, other):
-        return ops.eWiseMult(None, self, other)
+        from .operators import eWiseMult
+        return eWiseMult(None, self, other)
 
     def __rmul__(self, other):
-        return ops.eWiseMult(None, other, self)
+        from .operators import eWiseMult
+        return eWiseMult(None, other, self)
 
     def __matmul__(self, other):
-        return ops.vxm(None, self, other)
+        from .operators import vxm
+        return vxm(None, self, other)
 
     def __rmatmul__(self, other):
-        return ops.mxv(None, other, self)
+        from .operators import mxv
+        return mxv(None, other, self)
 
     def __invert__(self):
         return VectorComplement(self)
 
     def __neg__(self):
-        return ops.AdditiveInverse(self)
+        from .operators import apply, AdditiveInverse
+        return apply(AdditiveInverse, self)
 
     def __getitem__(self, item):
+        from .expressions import MaskedVector
 
         if type(item) is not tuple:
             item = (item,)
 
-        return ops.MaskedExpression(self, *item)
+        return MaskedVector(self, *item)
 
     def __setitem__(self, item, value):
+        from .expressions import _Expression, AccumExpression
 
-        if isinstance(value, ops._Expression):
+        if isinstance(value, AccumExpression):
+            from .ops import get_accum
+            self[item].assign(value.expr, get_accum())
+
+        elif isinstance(value, _Expression):
             value.eval(self[item])
 
-        else:
+        elif isinstance(value, (Vector, self.dtype)):
             self[item].assign(value)
+
+        else:
+            raise TypeError("Can't assign {}".format(value))
 
         return self
 

@@ -4,17 +4,22 @@ from contextlib import ContextDecorator
 from functools import wraps
 from itertools import product
 import numpy as np
-from . import c_functions as c
+
+from . import expressions as expr
 
 __all__ = [
+    # operator classes
     "Accumulator",
+    "UnaryOp",
     "BinaryOp",
     "Monoid",
     "Semiring",
+    # functions
     "apply",
     "reduce",
     "extract",
     "assign",
+    # operator instances
     "BooleanAccumulate",
     "ArithmeticAccumulate",
     "Identity",
@@ -28,14 +33,18 @@ __all__ = [
     "MaxSelect2ndSemiring",
     "MinSelect1stSemiring",
     "MaxSelect1stSemiring",
-    "unary_ops",
-    "binary_ops",
-    "identities"
 ]
+
+
+###############################################################################
+####   Operator definitions, provide context managers for expressions     #####
+###############################################################################
 
 _accum = [None]
 _ops = []
 
+def get_accum():
+    return _accum[-1]
 
 class _Op(ABC):
 
@@ -60,6 +69,11 @@ class _Op(ABC):
 
 class UnaryOp(_Op, ContextDecorator):
 
+    identity                = "Identity"
+    logical_not             = "LogicalNot"
+    additive_inverse        = "AdditiveInverse"
+    multiplicative_inverse  = "MultiplicativeInverse"
+
     def __init__(self, unary_op, bound_const=None):
         self.unary_op = unary_op
         if bound_const is not None:
@@ -68,11 +82,24 @@ class UnaryOp(_Op, ContextDecorator):
 
 class BinaryOp(_Op, ContextDecorator):
 
+    plus        = "Plus"
+    times       = "Times"
+    logical_or  = "LogicalOr"
+    logical_and = "LogicalAnd"
+    minimum     = "Min"
+    maximum     = "Max"
+    first       = "First"
+    second      = "Second"
+
     def __init__(a_binary_op):
         self.a_binary_op = a_binary_op
 
 
 class Monoid(BinaryOp, ContextDecorator):
+
+    additive    = 0
+    boolean     = "false"
+    minimum     = "MinIdentity"
 
     def __init__(self, a_binary_op, identity):
         self.a_binary_op = a_binary_op
@@ -102,355 +129,29 @@ class Accumulator(BinaryOp, ContextDecorator):
         _accum.pop()
         return False
 
-# decorator for expression.eval() to memoize results
-def lazy_eval(func):
-
-    @wraps(func)
-    def new_func(self, *args, **kwargs):
-
-        C = func(self, *args, **kwargs)
-        self._eval = C
-        return C
-
-    return new_func
-
-
-class _Expression(ABC):
-    
-    @abstractmethod
-    def eval(): pass
-
-    @property
-    def evaluated(self):
-        if not hasattr(self, "_eval"):
-            self._eval = self.eval()
-        return self._eval
-
-    @property
-    def container(self):
-        return self.evaluated.container
-
-    @property
-    def dtype(self):
-        return self.evaluated.dtype
-
-    @property
-    def shape(self):
-        return self.evaluated.shape
-
-    def __neg__(self):
-        return -self.evaluated
-
-    def __invert__(self):
-        return ~self.evaluated
-
-    def __repr__(self):
-        return str(self.evaluated)
-
-    def __iter__(self):
-        return iter(self.evaluated)
-
-
-# reduce, apply
-class UnaryExpression(_Expression):
-
-    def __init__(self, f, op, A, out_shape):
-        self.f = f
-        self.op = op
-        self.A = A
-        self.out_shape = out_shape
-
-    @lazy_eval
-    def eval(self, out=None, accum=None):
-
-        if out is None:
-            out = self.A._out_container()
-
-        # if out is not masked, apply NoMask
-        try: out = out[:]
-        except TypeError: pass
-
-        c.operator(
-            function        = self.f,
-            operation       = self.op,
-            accum           = accum,
-            replace_flag    = out.replace_flag,
-            A               = self.A,
-            C               = out.C,
-            M               = out.M
-        )
-
-        return out.C
-
-
-class BinaryExpression(_Expression):
-
-    def __init__(self, f, op, A, B, out_shape):
-        self.f = f
-        self.op = op
-        self.A = A
-        self.B = B
-        self.out_shape = out_shape
-
-    @lazy_eval
-    def eval(self, out=None, accum=None):
-
-        # TODO fix container construction
-        if out is None:
-            out = self.A._out_container(self.B)
-
-        # if out is not masked, apply NoMask
-        try: out = out[:]
-        except TypeError: pass
-
-        c.operator(
-            function        = self.f,
-            operation       = self.op,
-            accum           = accum,
-            replace_flag    = out.replace_flag,
-            A               = self.A,
-            B               = self.B,
-            C               = out.C,
-            M               = out.M
-        )
-
-        return out.C
-
-
-class ReduceExpression(_Expression):
-    
-    def __init__(self, reduce, A):
-        self.reduce = reduce
-        self.A = A
-
-    @lazy_eval
-    def eval(self, out=None, accum=None):
-
-        # if out is not masked, apply NoMask
-        try: out = out[:]
-        except TypeError: pass
-
-        containers = {"A": self.A}
-
-        # reduce to a scalar
-        if out is None:
-            containers["C"] = self.reduce.identity
-            replace_flag = None
-
-        elif isinstance(out, int):
-            containers["C"] = out
-
-        # reduce to a vector
-        else:
-            containers["C"] = out.C
-            containers["M"] = out.M
-            replace_flag = out.replace_flag
-
-        result = c.operator(
-                function        = "reduce",
-                operation       = self.reduce,
-                accum           = accum,
-                replace_flag    = replace_flag,
-                **containers
-        )
-
-        return result
-
-
-class MaskedExpression(_Expression):
-    
-    class NoMask(object):
-
-        def __init__(self):
-            self.container = c.no_mask()
-            self.dtype = None
-
-
-    def __init__(self, C, *mask):
-
-        # if assigning into matrix, use M
-        # if extracting from matrix, use idx
-
-        self.C = C
-        self.idx = dict()
-        self.replace_flag = False
-
-        # TODO only allow replace with mask, not slice
-
-        # replace flag
-        if len(mask) > 0 and type(mask[-1]) is bool:
-            *mask, self.replace_flag = mask
-
-        # container mask (only works on LHS)
-        if len(mask) == 1 and hasattr(mask[0], "container"):
-            self.M = mask
-
-        if mask == (slice(None, None, None),):
-            self.M = self.NoMask()
-
-            # convert 1D index to 2D
-            if len(C.shape) == 2:
-                mask = (*mask, *mask)
-
-        # slice or number index
-        if len(mask) == len(C.shape):
-
-            # element accessor
-            if all(isinstance(i, int) for i in mask):
-                self.idx["index"] = mask
-
-            elif len(C.shape) == 1:
-
-                i = mask[0]
-                if isinstance(i, slice):
-                    self.idx["indices"] = range(*i.indices(*C.shape))
-                elif isinstance(i, (list, np.array)):
-                    self.idx["indices"] = i
-
-            elif len(C.shape) == 2:
-
-                for i, s, d in zip(mask, C.shape, ("row", "col")):
-                    if isinstance(i, slice): 
-                        self.idx[d + "_indices"] = range(*i.indices(s))
-
-                    elif isinstance(i, (list, np.array)):
-                        self.idx[d + "_indices"] = i
-
-                    elif isinstance(i, int):
-                        self.idx[d + "_index"] = i
-
-            else:
-                raise TypeError("Mask must be boolean Matrix or 2D slice with optional replace flag")
-
-        elif len(mask) > 0:
-            raise TypeError("Mask must be boolean Matrix or 2D slice with optional replace flag")
-
-    # converts row/col indices into matrix mask
-    @property
-    def M(self):
-        # if mask is set
-        if hasattr(self, "_M"):
-            return self._M
-        
-        # if indices are set
-        try:
-            rows = self.idx["row_indices"]
-            cols = self.idx["col_indices"]
-
-            i, j = zip(*product(rows, cols))
-
-            # TODO
-            self._M = type(self.C)(
-                    ([True] * len(i), (i, j)), 
-                    shape=self.C.shape, 
-                    dtype=bool
-            )
-
-        # if no mask
-        except:
-            self._M = self.NoMask()
-        
-        return self._M
-
-    @M.setter
-    def M(self, M):
-        self._M = M
-
-    # TODO fix broken shit
-    def __iadd__(self, other):
-
-        return (other, _accum[-1])
-
-    # TODO
-    #def __imul__(self, other):
-    #    pass
-
-    @property
-    def shape(self):
-        return self.C.shape
-
-    def eval(self):
-        return self.extract()
-
-    @lazy_eval
-    def extract(self, out=None, accum=None):
-
-        if "index" in self.idx:
-            return self.C.container.extractElement(*self.idx["index"])
-
-        # construct container of correct shape and size to extract to
-        if out is None:
-            shape = None
-
-            if len(self.C.shape) == 1:
-                shape = (len(self.idx["indices"]),)
-
-            elif len(self.C.shape) == 2:
-
-                if "row_index" in self.idx:
-                    shape = (len(self.idx["col_indices"]),)
-                elif "col_index" in self.idx:
-                    shape = (len(self.idx["row_indices"]),)
-                else:
-                    shape = (
-                            len(self.idx["row_indices"]), 
-                            len(self.idx["col_indices"])
-                    )
-
-            # TODO construct appropriate container
-            out = type(self.C)(
-                    shape=shape, 
-                    dtype=self.C.dtype
-            )[:]
-
-        result = c.operator(
-                function        = "extract",
-                accum           = accum,
-                replace_flag    = self.replace_flag,
-                C               = out.C,
-                M               = out.M,
-                A               = self.C,
-                **self.idx
-        )
-
-        return out.C
-                    
-    @lazy_eval
-    def assign(self, assign, accum=None):
-
-        if isinstance(assign, self.C.dtype):
-
-            # element setter
-            if "index" in self.idx:
-                self.C.container.setElement(*self.idx["index"], assign)
-                return
-
-            # constant assignment to indices
-            else:
-                A = assign
-                # full index
-                idx = self.C[:].idx
-
-        else:
-            # if assigning un-indexed container
-            if not isinstance(assign, MaskedExpression):
-                assign = assign[:]
-
-            A = assign.C
-            idx = assign.idx
-
-        c.operator(
-                "assign",
-                replace_flag    = self.replace_flag,
-                accum           = accum,
-                C               = self.C,
-                M               = self.M,
-                A               = A,
-                **idx
-        )
-
-        return self.C
-
+# default accumulators
+ArithmeticAccumulate = Accumulator(BinaryOp.plus)
+BooleanAccumulate = Accumulator(BinaryOp.logical_and)
+
+# default unary operators
+Identity = UnaryOp(UnaryOp.identity)
+AdditiveInverse = UnaryOp(UnaryOp.additive_inverse)
+MultiplicativeInverse = UnaryOp(UnaryOp.multiplicative_inverse)
+
+# default semirings
+ArithmeticSemiring = Semiring(BinaryOp.plus, Monoid.additive, BinaryOp.times)
+LogicalSemiring = Semiring(BinaryOp.logical_or, Monoid.boolean, BinaryOp.logical_and)
+MinPlusSemiring = Semiring(BinaryOp.minimum, Monoid.minimum, BinaryOp.plus)
+MaxTimesSemiring = Semiring(BinaryOp.maximum, Monoid.additive, BinaryOp.times)
+MinSelect2ndSemiring = Semiring(BinaryOp.minimum, Monoid.minimum, BinaryOp.second)
+MaxSelect2ndSemiring = Semiring(BinaryOp.maximum, Monoid.additive, BinaryOp.second)
+MinSelect1stSemiring = Semiring(BinaryOp.minimum, Monoid.minimum, BinaryOp.first)
+MaxSelect1stSemiring = Semiring(BinaryOp.maximum, Monoid.additive, BinaryOp.first)
+
+
+###############################################################################
+####                    Functions to use operators with                   #####
+###############################################################################
 
 # function decorator to fill in operator from context if not provided
 def operator_type(op_type):
@@ -480,51 +181,56 @@ def operator_type(op_type):
 @operator_type(Semiring)
 def mxm(semiring, A, B):
     out_shape = (B.shape[0], A.shape[1])
-    return BinaryExpression("mxm", semiring, A, B, out_shape)
+    return expr.BinaryExpression("mxm", semiring, A, B, out_shape)
 
 @operator_type(Semiring)
 def vxm(semiring, A, B):
     out_shape = (B.shape[0],)
-    return BinaryExpression("vxm", semiring, A, B, out_shape)
+    return expr.BinaryExpression("vxm", semiring, A, B, out_shape)
 
 @operator_type(Semiring)
 def mxv(semiring, A, B):
     out_shape = (A.shape[1],)
-    return BinaryExpression("mxv", semiring, A, B, out_shape)
+    return expr.BinaryExpression("mxv", semiring, A, B, out_shape)
 
 @operator_type(BinaryOp)
 def eWiseMult(binary_op, A, B):
     if len(A.shape) == 2 and len(B.shape) == 2:
-        return BinaryExpression("eWiseMultMatrix", binary_op, A, B, A.shape)
+        return expr.BinaryExpression("eWiseMultMatrix", binary_op, A, B, A.shape)
     elif len(A.shape) == 1 and len(B.shape) == 1:
-        return BinaryExpression("eWiseMultVector", binary_op, A, B, A.shape)
+        return expr.BinaryExpression("eWiseMultVector", binary_op, A, B, A.shape)
 
 @operator_type(BinaryOp)
 def eWiseAdd(binary_op, A, B):
     if len(A.shape) == 2 and len(B.shape) == 2:
-        return BinaryExpression("eWiseAddMatrix", binary_op, A, B, A.shape)
+        return expr.BinaryExpression("eWiseAddMatrix", binary_op, A, B, A.shape)
     elif len(A.shape) == 1 and len(B.shape) == 1:
-        return BinaryExpression("eWiseAddVector", binary_op, A, B, A.shape)
+        return expr.BinaryExpression("eWiseAddVector", binary_op, A, B, A.shape)
     else:
         raise Error("A and B must have the same dimension")
 
 @operator_type(UnaryOp)
 def apply(unary_op, A):
 
-    return UnaryExpression("apply", unary_op, A, A.shape)
+    return expr.ApplyExpression("apply", unary_op, A, A.shape)
 
 @operator_type(Monoid)
-def reduce(monoid, A):
+def reduce(monoid, A, C=None):
+    if hasattr(C, "shape"):
+        out_shape = C.shape
+    else:
+        out_shape = (1,)
+    return expr.ReduceExpression(monoid, A)
 
-    return ReduceExpression(monoid, A)
-
-
-# TODO
 def extract(A, *indices):
-    pass
+    return expr.MaskedExpression(A, *indices)
 
 def assign(A, *indices):
+    return expr.MaskedExpression(A, *indices)
+
+def transpose(A):
     pass
+
 
 
 # dictionary of values to build operators
@@ -565,24 +271,4 @@ identities = OperatorMap({
     "boolean": "false",
     "minimum": "MinIdentity"
 })
-
-
-# default accumulators
-ArithmeticAccumulate = Accumulator(binary_ops.plus)
-BooleanAccumulate = Accumulator(binary_ops.logical_and)
-
-# default unary operators
-Identity = UnaryOp(unary_ops.identity)
-AdditiveInverse = UnaryOp(unary_ops.additive_inverse)
-MultiplicativeInverse = UnaryOp(unary_ops.multiplicative_inverse)
-
-# default semirings
-ArithmeticSemiring = Semiring(binary_ops.plus, identities.additive, binary_ops.times)
-LogicalSemiring = Semiring(binary_ops.logical_or, identities.boolean, binary_ops.logical_and)
-MinPlusSemiring = Semiring(binary_ops.minimum, identities.minimum, binary_ops.plus)
-MaxTimesSemiring = Semiring(binary_ops.maximum, identities.additive, binary_ops.times)
-MinSelect2ndSemiring = Semiring(binary_ops.minimum, identities.minimum, binary_ops.second)
-MaxSelect2ndSemiring = Semiring(binary_ops.maximum, identities.additive, binary_ops.second)
-MinSelect1stSemiring = Semiring(binary_ops.minimum, identities.minimum, binary_ops.first)
-MaxSelect1stSemiring = Semiring(binary_ops.maximum, identities.additive, binary_ops.first)
 

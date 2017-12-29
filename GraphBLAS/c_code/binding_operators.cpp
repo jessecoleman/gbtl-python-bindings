@@ -56,22 +56,9 @@ typedef GraphBLAS::TransposeView<GraphBLAS::Matrix<M_TYPE>> MMatrixT;
 typedef GraphBLAS::Vector<M_TYPE> MVectorT;
 #elif defined(M_VECTORCOMPLEMENT)
 typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<M_TYPE>> MVectorT;
-#elif defined(M_NOMASK)
+#elif defined(M__NOMASK)
 typedef GraphBLAS::NoMask MMatrixT;
 typedef GraphBLAS::NoMask MVectorT;
-#endif
-
-#if defined(MIN_IDENTITY)
-#define A_IDENTITY std::numeric_limits<C_TYPE>::max()
-#elif defined(SEMIRING) || defined(REDUCE)
-#define A_IDENTITY IDENTITY
-#endif
-
-#if defined(APPLY) && defined(BOUND_CONST)
-typedef GraphBLAS::BinaryOp_Bind2nd<A_TYPE, GraphBLAS::UNARY_OP<A_TYPE, C_TYPE>> ApplyT;
-#elif defined(APPLY)
-#define BOUND_CONST
-typedef GraphBLAS::UNARY_OP<A_TYPE, C_TYPE> ApplyT;
 #endif
 
 // for assign and extract operations
@@ -87,229 +74,296 @@ typedef std::vector<COL_INDICES_TYPE> CSequenceT;
 typedef COL_INDEX_TYPE CIndexT
 #endif
 
+#if defined(INDICES)
+typedef std::vector<INDICES_TYPE> SequenceT;
+#endif
+
 #if defined(NO_ACCUM)
 typedef GraphBLAS::NoAccumulate AccumT;
 #else
 typedef GraphBLAS::ACCUM_BINARYOP<C_TYPE> AccumT;
 #endif
 
-#if defined(SEMIRING) || defined(REDUCE)
+#if defined(MIN_IDENTITY)
+#define A_IDENTITY std::numeric_limits<C_TYPE>::max()
+#elif defined(SEMIRING) || defined(REDUCE)
+#define A_IDENTITY IDENTITY
+#endif
+
+#if defined(APPLY) \
+ && defined(BOUND_CONST)
+typedef GraphBLAS::BinaryOp_Bind2nd<A_TYPE, GraphBLAS::UNARY_OP<A_TYPE, C_TYPE>> ApplyT;
+#elif defined(APPLY)
+#define BOUND_CONST
+typedef GraphBLAS::UNARY_OP<A_TYPE, C_TYPE> ApplyT;
+#endif
+
+// operations that need monoid
+#if defined(SEMIRING) \
+ || defined(REDUCE)
+typedef GraphBLAS::A_BINARY_OP<A_TYPE> AddBinaryOp;
 GEN_GRAPHBLAS_MONOID(Monoid, GraphBLAS::A_BINARY_OP, A_IDENTITY)
 typedef Monoid<C_TYPE> MonoidT;
-typedef GraphBLAS::A_BINARY_OP<A_TYPE> AddBinaryOp;
-
+#endif
 #if defined(SEMIRING)
 typedef GraphBLAS::M_BINARY_OP<A_TYPE, B_TYPE, C_TYPE> MultBinaryOp;
 GEN_GRAPHBLAS_SEMIRING(Semiring, Monoid, GraphBLAS::M_BINARY_OP)
 typedef Semiring<A_TYPE, B_TYPE, C_TYPE> SemiringT;
 #endif
-#endif
 
 #if defined(MXM)
 // TODO check order of parameters
 void mxm(
-        CMatrixT &C,
+        CMatrixT       &C,
         MMatrixT const &M,
         AMatrixT const &A,
         BMatrixT const &B,
-        bool replace_flag
+        bool            replace_flag
     )
 { GraphBLAS::mxm(C, M, AccumT(), SemiringT(), A, B, replace_flag); }
 
 #elif defined(MXV)
 void mxv(
-        WVectorT &C,
+        WVectorT       &C,
         MVectorT const &M,
         AMatrixT const &A,
         VVectorT const &B,
-        bool replace_flag
+        bool            replace_flag
     )
 { GraphBLAS::mxv(C, M, AccumT(), SemiringT(), A, B, replace_flag); }
 
 #elif defined(VXM)
 void vxm(
-        WVectorT &C,
+        WVectorT       &C,
         MVectorT const &M,
         UVectorT const &A,
         BMatrixT const &B,
-        bool replace_flag
+        bool            replace_flag
     )
 { GraphBLAS::vxm(C, M, AccumT(), SemiringT(), A, B, replace_flag); }
 
 #elif defined(EWISEADDMATRIX)
 void eWiseAddMatrix(
-        CMatrixT &C,
+        CMatrixT       &C,
         MMatrixT const &M,
         AMatrixT const &A,
         BMatrixT const &B,
-        bool replace_flag
+        bool            replace_flag
     )
 { GraphBLAS::eWiseAdd(C, M, AccumT(), AddBinaryOp(), A, B, replace_flag); }
 
 #elif defined(EWISEADDVECTOR)
 void eWiseAddVector(
-        WVectorT &C,
+        WVectorT       &C,
         MVectorT const &M,
         UVectorT const &A,
         VVectorT const &B,
-        bool replace_flag
+        bool            replace_flag
     )
 { GraphBLAS::eWiseAdd(C, M, AccumT(), AddBinaryOp(), A, B, replace_flag); }
 
 #elif defined(EWISEMULTMATRIX)
 void eWiseMultMatrix(
-        CMatrixT &C,
+        CMatrixT       &C,
         MMatrixT const &M,
         AMatrixT const &A,
         BMatrixT const &B,
-        bool replace_flag
+        bool            replace_flag
     )
 { GraphBLAS::eWiseMult(C, M, AccumT(), MultBinaryOp(), A, B, replace_flag); }
 
 #elif defined(EWISEMULTVECTOR)
 void eWiseMultVector(
-        WVectorT &C,
+        WVectorT       &C,
         MVectorT const &M,
         UVectorT const &A,
         VVectorT const &B,
-        bool replace_flag
+        bool            replace_flag
     )
 { GraphBLAS::eWiseMult(C, M, AccumT(), MultBinaryOp(), A, B, replace_flag); }
 
-#elif defined(APPLY) && defined(C_MATRIX)
+#elif defined(APPLY) \
+   && defined(C_MATRIX)
 void applyMatrix(
-        CMatrixT &C,
+        CMatrixT       &C,
         MMatrixT const &M,
         AMatrixT const &A,
-        bool replace_flag
+        bool            replace_flag
     )
 { GraphBLAS::apply(C, M, AccumT(), ApplyT(BOUND_CONST), A, replace_flag); }
 
-#elif defined(APPLY) && defined(C_VECTOR)
+#elif defined(APPLY) \
+   && defined(C_VECTOR)
 void applyVector(
-        WVectorT &C,
+        WVectorT       &C,
         MVectorT const &M,
         UVectorT const &A, 
-        bool replace_flag
+        bool            replace_flag
     )
 { GraphBLAS::apply(C, M, AccumT(), ApplyT(BOUND_CONST), A, replace_flag); }
 
-#elif defined(REDUCE) && defined(A_MATRIX) && defined(C_VECTOR)
+#elif defined(REDUCE) \
+   && defined(A_MATRIX) \
+   && defined(C_VECTOR)
 void reduceMatrixVector(
-        WVectorT &C, 
+        WVectorT       &C, 
         MVectorT const &M, 
         AMatrixT const &A,
-        bool replace_flag
+        bool            replace_flag
     ) 
 { reduce(C, M, AccumT(), MonoidT(), A, replace_flag); }
 
-#elif defined(REDUCE) && defined(A_MATRIX)
-CValueT reduceMatrix(CValueT &C, AMatrixT const &A) {
+#elif defined(REDUCE) \
+   && defined(A_MATRIX)
+CValueT reduceMatrix(
+        CValueT        &C, 
+        AMatrixT const &A
+    ) {
     reduce(C, AccumT(), MonoidT(), A);
     return C;
 } 
  
-#elif defined(REDUCE) && defined(A_VECTOR)
-CValueT reduceVector(CValueT &C, UVectorT const &A) {
+#elif defined(REDUCE) \
+   && defined(A_VECTOR)
+CValueT reduceVector(
+        CValueT        &C, 
+        UVectorT const &A
+    ) {
     reduce(C, AccumT(), MonoidT(), A);
     return C;
 }
 
-#elif defined(EXTRACT) && defined(C_MATRIX) && defined(ROW_INDICES) && defined(COL_INDICES)
+#elif defined(EXTRACT) \
+   && defined(C_MATRIX) \
+   && defined(ROW_INDICES) \
+   && defined(COL_INDICES)
 void extractMatrix(
-        CMatrixT &C,
-        MMatrixT const &M,
-        AMatrixT const &A,
+        CMatrixT         &C,
+        MMatrixT   const &M,
+        AMatrixT   const &A,
         RSequenceT const &row_indices,
         CSequenceT const &col_indices,
-        bool replace_flag
+        bool              replace_flag
     )
 { extract(C, M, AccumT(), A, row_indices, col_indices, replace_flag); }
 
-#elif defined(EXTRACT) && defined(C_MATRIX) && defined(ROW_INDICES) && defined(COL_INDEX)
+#elif defined(EXTRACT) \
+   && defined(C_MATRIX) \
+   && defined(ROW_INDICES) \
+   && defined(COL_INDEX)
 void extractMatrixCol(
-        WVectorT &C,
-        MVectorT const &M,
-        AMatrixT const &A,
+        WVectorT         &C,
+        MVectorT   const &M,
+        AMatrixT   const &A,
         RSequenceT const &row_indices,
-        CIndexT const &col_index,
-        bool replace_flag
+        CIndexT    const &col_index,
+        bool              replace_flag
     )
 { extract(C, M, AccumT(), A, row_indices, col_index, replace_flag); }
 
-#elif defined(EXTRACT) && defined(C_VECTOR) && defined(INDICES)
+#elif defined(EXTRACT) \
+   && defined(C_VECTOR) \
+   && defined(INDICES)
 void extractVector(
-        WVectorT &C,
-        MVectorT const &M,
-        UVectorT const &A,
+        WVectorT        &C,
+        MVectorT  const &M,
+        UVectorT  const &A,
         SequenceT const &indices,
-        bool replace_flag
+        bool             replace_flag
     )
 { extract(C, M, AccumT(), A, indices, replace_flag); }
 
-#elif defined(ASSIGN) && defined(C_MATRIX) && defined(A_MATRIX) && defined(ROW_INDICES) && defined(COL_INDICES)
+#elif defined(ASSIGN) \
+   && defined(C_MATRIX) \
+   && defined(A_MATRIX) \
+   && defined(ROW_INDICES) \
+   && defined(COL_INDICES)
 void assignMatrix(
-        CMatrixT &C,
-        MMatrixT const &M,
-        AMatrixT const &A,
+        CMatrixT         &C,
+        MMatrixT   const &M,
+        AMatrixT   const &A,
         RSequenceT const &row_indices,
         CSequenceT const &col_indices,
-        bool replace_flag
+        bool              replace_flag
     )
 { assign(C, M, AccumT(), A, row_indices, col_indices, replace_flag); }
 
-#elif defined(ASSIGN) && defined(C_MATRIX) && defined(A_MATRIX) && defined(ROW_INDICES) && defined(COL_INDEX)
+#elif defined(ASSIGN) \
+   && defined(C_MATRIX) \
+   && defined(A_MATRIX) \
+   && defined(ROW_INDICES) \
+   && defined(COL_INDEX)
 void assignMatrixCol(
-        CMatrixT &C,
-        MMatrixT const &M,
-        AMatrixT const &A,
+        CMatrixT         &C,
+        MMatrixT   const &M,
+        AMatrixT   const &A,
         RSequenceT const &row_indices,
-        CIndexT const &col_index,
-        bool replace_flag
+        CIndexT    const &col_index,
+        bool              replace_flag
     )
 { assign(C, M, AccumT(), A, row_indices, col_index, replace_flag); }
 
-#elif defined(ASSIGN) && defined(C_MATRIX) && defined(A_MATRIX) && defined(ROW_INDEX) && defined(COL_INDICES)
+#elif defined(ASSIGN) \
+   && defined(C_MATRIX) \
+   && defined(A_MATRIX) \
+   && defined(ROW_INDEX) \
+   && defined(COL_INDICES)
 void assignMatrixRow(
-        CMatrixT &C,
-        MMatrixT const &M,
-        AMatrixT const &A,
-        RIndexT const &row_index,
+        CMatrixT         &C,
+        MMatrixT   const &M,
+        AMatrixT   const &A,
+        RIndexT    const &row_index,
         CSequenceT const &col_indices,
-        bool replace_flag
+        bool              replace_flag
     )
 { assign(C, M, AccumT(), A, row_index, col_indices, replace_flag); }
 
-#elif defined(ASSIGN) && defined(C_MATRIX) && defined(A_VALUE)
+#elif defined(ASSIGN) \
+   && defined(C_MATRIX) \
+   && defined(A_VALUE)
 void assignMatrixConst(
-        CMatrixT &C,
-        MMatrixT const &M,
-        AValueT const &A,
-        RSequenceT const &row_indices,
-        CSequenceT const &col_indices,
-        bool replace_flag
+        CMatrixT          &C,
+        MMatrixT    const &M,
+        AValueT     const &A,
+        RSequenceT  const &row_indices,
+        CSequenceT  const &col_indices,
+        bool               replace_flag
     )
 { assign(C, M, AccumT(), A, row_indices, col_indices, replace_flag); }
 
-#elif defined(ASSIGN) && defined(C_VECTOR) && defined(A_VECTOR) && defined(INDICES)
+#elif defined(ASSIGN) \
+   && defined(C_VECTOR) \
+   && defined(A_VECTOR) \
+   && defined(INDICES)
 void assignVector(
-        WVectorT &C,
-        MVectorT const &M,
-        UVectorT const &A,
+        WVectorT        &C,
+        MVectorT  const &M,
+        UVectorT  const &A,
         SequenceT const &indices,
-        bool replace_flag
+        bool             replace_flag
     )
 { assign(C, M, AccumT(), A, indices, replace_flag); }
 
-#elif defined(ASSIGN) && defined(C_VECTOR) && defined(A_VALUE)
+#elif defined(ASSIGN) \
+   && defined(C_VECTOR) \
+   && defined(A_VALUE)
 void assignVectorConst(
-        WVectorT &C,
-        MMatrixT const &M,
-        AValueT const &A,
+        WVectorT        &C,
+        MVectorT  const &M,
+        AValueT   const &A,
         SequenceT const &indices,
-        bool replace_flag
+        bool             replace_flag
     )
-{ assign(C, M, AccumT(), val, indices, replace_flag); }
+{ assign(C, M, AccumT(), A, indices, replace_flag); }
+
+#elif defined(TRANSPOSE)
+void transpose(
+        CMatrixT       &C,
+        MMatrixT const &Mask,
+        AMatrixT const &A,
+        bool            replace_flag
+    )
+{ transposed(C, M, AccumT(), A, replace_flag); }
 
 #endif
 
@@ -375,6 +429,9 @@ PYBIND11_MODULE(MODULE, m) {
     m.def("assign", &assignVector, "C"_a, "M"_a, "A"_a, "indices"_a, "replace_flag"_a);
 #elif defined(ASSIGN) && defined(C_VECTOR) && defined(A_VALUE)
     m.def("assign", &assignVectorConst, "C"_a, "M"_a, "A"_a, "indices"_a, "replace_flag"_a);
+#elif defined(TRANSPOSE)
+    m.def("transpose", &transpose, "C"_a, "M"_a, "A"_a, "replace_flag"_a);
+
 
 #endif
 }
