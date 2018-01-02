@@ -40,12 +40,6 @@ __all__ = [
 ####   Operator definitions, provide context managers for expressions     #####
 ###############################################################################
 
-_accum = [None]
-_ops = []
-
-def get_accum():
-    return _accum[-1]
-
 class _Op(ABC):
 
     def __enter__(self):
@@ -75,6 +69,7 @@ class UnaryOp(_Op, ContextDecorator):
     multiplicative_inverse  = "MultiplicativeInverse"
 
     def __init__(self, unary_op, bound_const=None):
+
         self.unary_op = unary_op
         if bound_const is not None:
             self.bound_const = bound_const
@@ -102,6 +97,7 @@ class Monoid(BinaryOp, ContextDecorator):
     minimum     = "MinIdentity"
 
     def __init__(self, a_binary_op, identity):
+
         self.a_binary_op = a_binary_op
         self.identity = identity
 
@@ -109,6 +105,7 @@ class Monoid(BinaryOp, ContextDecorator):
 class Semiring(Monoid, ContextDecorator):
 
     def __init__(self, a_binary_op, identity, m_binary_op):
+        
         self.a_binary_op = a_binary_op
         self.identity = identity
         self.m_binary_op = m_binary_op
@@ -117,21 +114,48 @@ class Semiring(Monoid, ContextDecorator):
 class Accumulator(BinaryOp, ContextDecorator):
 
     def __init__(self, binary_op):
+        
         self.binary_op = binary_op
 
     def __enter__(self):
+        
         global _accum
         _accum.append(self)
         return self
 
     def __exit__(self, *errors):
+        
         global _accum
         _accum.pop()
         return False
 
+
+class ReplaceFlag(ContextDecorator):
+    
+    def __init__(self, flag):
+        
+        self.flag = flag
+
+    def __enter__(self):
+        
+        global _replace
+        _replace.append(self)
+        return self
+
+    def __exit__(self):
+        
+        global _replace
+        _replace.pop()
+        return False
+
+
 # default accumulators
 ArithmeticAccumulate = Accumulator(BinaryOp.plus)
 BooleanAccumulate = Accumulator(BinaryOp.logical_and)
+
+# replace flags
+Replace = ReplaceFlag(True)
+NoReplace = ReplaceFlag(False)
 
 # default unary operators
 Identity = UnaryOp(UnaryOp.identity)
@@ -152,6 +176,16 @@ MaxSelect1stSemiring = Semiring(BinaryOp.maximum, Monoid.additive, BinaryOp.firs
 ###############################################################################
 ####                    Functions to use operators with                   #####
 ###############################################################################
+
+_accum      = [None]
+_ops        = [ArithmeticSemiring]
+_replace    = [NoReplace]
+
+def get_accum():
+    return _accum[-1]
+
+def get_replace():
+    return _replace[-1]
 
 # function decorator to fill in operator from context if not provided
 def operator_type(op_type):
@@ -179,58 +213,96 @@ def operator_type(op_type):
     return wrapper
             
 @operator_type(Semiring)
-def mxm(semiring, A, B):
-    out_shape = (B.shape[0], A.shape[1])
-    return expr.BinaryExpression("mxm", semiring, A, B, out_shape)
+def mxm(semiring, A, B, C=None):
+
+    if A.shape[0] == B.shape[1]:
+        return expr.BinaryExpression("mxm", semiring, A, B, C)
+
+    else:
+        raise Error("rows of A and columns of B must be equal")
 
 @operator_type(Semiring)
-def vxm(semiring, A, B):
-    out_shape = (B.shape[0],)
-    return expr.BinaryExpression("vxm", semiring, A, B, out_shape)
+def vxm(semiring, A, B, C=None):
+#def vxm(C, M, accum, semiring, A, B, replace_flag):
+
+    if A.shape[0] == B.shape[0]:
+        return expr.BinaryExpression("vxm", semiring, A, B, C)
+
+    else:
+        raise Error("length of A and columns of B must be equal")
 
 @operator_type(Semiring)
-def mxv(semiring, A, B):
-    out_shape = (A.shape[1],)
-    return expr.BinaryExpression("mxv", semiring, A, B, out_shape)
+def mxv(semiring, A, B, C=None):
+
+    if A.shape[1] == B.shape[0]:
+        return expr.BinaryExpression("mxv", semiring, A, B, C)
+
+    else:
+        raise Error("rows of A and length of B must be equal")
+
 
 @operator_type(BinaryOp)
-def eWiseMult(binary_op, A, B):
-    if len(A.shape) == 2 and len(B.shape) == 2:
-        return expr.BinaryExpression("eWiseMultMatrix", binary_op, A, B, A.shape)
-    elif len(A.shape) == 1 and len(B.shape) == 1:
-        return expr.BinaryExpression("eWiseMultVector", binary_op, A, B, A.shape)
+def eWiseMult(binary_op, A, B, C=None):
+
+    if 1 == len(A.shape) == len(B.shape):
+        return expr.BinaryExpression("eWiseMultVector", binary_op, A, B, C)
+
+    elif 2 == len(A.shape) == len(B.shape):
+        return expr.BinaryExpression("eWiseMultMatrix", binary_op, A, B, C)
+
+    else:
+        raise Error("A and B must have the same dimension")
+
 
 @operator_type(BinaryOp)
-def eWiseAdd(binary_op, A, B):
-    if len(A.shape) == 2 and len(B.shape) == 2:
-        return expr.BinaryExpression("eWiseAddMatrix", binary_op, A, B, A.shape)
-    elif len(A.shape) == 1 and len(B.shape) == 1:
-        return expr.BinaryExpression("eWiseAddVector", binary_op, A, B, A.shape)
+def eWiseAdd(binary_op, A, B, C=None):
+
+    if 1 == len(A.shape) == len(B.shape):
+        return expr.BinaryExpression("eWiseAddVector", binary_op, A, B, C)
+
+    elif 2 == len(A.shape) == len(B.shape):
+        return expr.BinaryExpression("eWiseAddMatrix", binary_op, A, B, C)
+
     else:
         raise Error("A and B must have the same dimension")
 
 @operator_type(UnaryOp)
-def apply(unary_op, A):
+def apply(unary_op, A, C=None):
 
-    return expr.ApplyExpression("apply", unary_op, A, A.shape)
+    return expr.ApplyExpression(unary_op, A, C)
 
 @operator_type(Monoid)
 def reduce(monoid, A, C=None):
-    if hasattr(C, "shape"):
-        out_shape = C.shape
+
+    return expr.ReduceExpression(monoid, A, C)
+
+# TODO
+def extract(A, indices=None, C=None, M=None, accum=None, replace_flag=False):
+#def extract(A, C=None, M=None, accum=None, replace_flag=False):
+    
+    if len(A.shape) == 2:
+        idx = expr.IndexedMatrix(A, indices)
+
+    elif len(A.shape) == 1:
+        idx = expr.IndexedVector(A, indices)
+    
+    if C is not None:
+        return idx.eval(C, M, accum, replace_flag)
+
     else:
-        out_shape = (1,)
-    return expr.ReduceExpression(monoid, A)
+        return idx
 
-def extract(A, *indices):
-    return expr.MaskedExpression(A, *indices)
+def assign(A, M, C=None):
 
-def assign(A, *indices):
-    return expr.MaskedExpression(A, *indices)
+    if len(A.shape) == 2:
+        return expr.MaskedExpression(A, M, C)
 
-def transpose(A):
-    pass
+    elif len(A.shape) == 1:
+        return expr.MaskedExpression(A, M, C)
 
+def transpose(A, C=None):
+
+    return expr.TransposeExpression(A, C)
 
 
 # dictionary of values to build operators

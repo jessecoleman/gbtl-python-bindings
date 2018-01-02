@@ -135,60 +135,61 @@ class Matrix(object):
         return apply(AdditiveInverse, self)
 
     def __getitem__(self, item):
-        from .expressions import MaskedMatrix
+        from .operators import extract
+        from .expressions import IndexedMatrix
 
-        if type(item) is not tuple:
+        if type(item) != tuple:
             item = (item,)
 
-        return MaskedMatrix(self, *item)
+        if len(item) == 2 and all(isinstance(i, int) for i in item):
+            return self.container.extractElement(*item)
 
-    def __setitem__(self, item, value):
-        from .expressions import _Expression, AccumExpression
+        # item[M], item[M, flag], item[:], item[:, :], item[:, :, flag]
 
-        # if __iadd__
-        if isinstance(value, AccumExpression):
-            from .operators import get_accum
-            self[item].assign(value.expr, get_accum())
+        # assign/extract expression
+        if all(isinstance(i, (int, slice, list, np.array)) for i in item):
+            return IndexedMatrix(self, item)
 
-        # if self completes expression, evaluate
-        elif isinstance(value, _Expression):
-            value.eval(self[item])
+        # LHS expression
+        replace_flag = False
 
-        elif isinstance(value, (Matrix, self.dtype)):
-            self[item].assign(value)
+        if type(item[-1]) is bool:
+            *mask, replace_flag = item
+
+        if len(mask) == 1 and isintance(mask[0], Matrix):
+            return MaskedExpression(
+                    self, 
+                    mask=mask[0], 
+                    replace_flag=replace_flag
+            )
+
+        elif all(i == slice(None, None, None) for i in mask):
+            return MaskedExpression(self, replace_flag=replace_flag)
 
         else:
-            raise TypeError("Can't assign {}".format(value))
+            raise TypeError("Mask must be a boolean matrix or [:] slice")
+
+    def __setitem__(self, item, value):
+        from .expressions import _Expression, MaskedExpression
+
+        if len(item) == 2 and all(isinstance(i, int) for i in item):
+            self.container.setElement(*item, value)
+            return
+
+        # TODO handle other improper input
+        # if value is expression and self[item] is maskedexpression
+        try:
+            value.eval(self[item])
+
+        # elif self[item] is assign expression
+        except:
+            self[item].assign(value)
 
         return self
 
     def __iter__(self):
         i, j, v = self.container.extractTuples()
         return iter(zip(i, j, v))
-
-    # returns a new container with the correct output dimensions
-    def _out_container(self, other=None):
-
-        # output from apply
-        if other is None:
-            return Matrix(
-                    shape=self.shape,
-                    dtype=self.dtype
-            )
-
-        # output from semiring operation
-        ctype = c.upcast(self.dtype, other.dtype)
-        if isinstance(other, Matrix):
-            return Matrix(
-                    shape=(other.shape[0], self.shape[1]),
-                    dtype=ctype
-            )
-
-        elif isinstance(other, Vector):
-            return Vector(
-                    shape=(self.shape[1],),
-                    dtype=ctype
-            )
 
 
 class MatrixTranspose(Matrix):
@@ -293,6 +294,7 @@ class Vector(object):
         return self.container.size()
 
     def __iadd__(self, const):
+
         if isinstance(const, self.dtype):
             self[:] += const
             return self
@@ -333,66 +335,68 @@ class Vector(object):
         return apply(AdditiveInverse, self)
 
     def __getitem__(self, item):
-        from .expressions import MaskedVector
+        from .expressions import IndexedVector
 
-        if type(item) is not tuple:
+        if isinstance(item, int):
+            return self.container.extractElement(item)
+
+        # assign/extract expression
+        if isinstance(item, (int, slice, list, np.array)):
+            return IndexedVector(self, item)
+
+        if type(item) != tuple:
             item = (item,)
 
-        return MaskedVector(self, *item)
+        # LHS expression
+        replace_flag = False
 
-    def __setitem__(self, item, value):
-        from .expressions import _Expression, AccumExpression
+        if type(item[-1]) is bool:
+            *mask, replace_flag = item
 
-        if isinstance(value, AccumExpression):
-            from .ops import get_accum
-            self[item].assign(value.expr, get_accum())
+        if len(mask) == 1 and isintance(mask[0], Vector):
+            return MaskedExpression(
+                    self, 
+                    mask=mask[0], 
+                    replace_flag=replace_flag
+            )
 
-        elif isinstance(value, _Expression):
-            value.eval(self[item])
-
-        elif isinstance(value, (Vector, self.dtype)):
-            self[item].assign(value)
+        elif i[0] == slice(None, None, None):
+            return MaskedExpression(self, replace_flag=replace_flag)
 
         else:
-            raise TypeError("Can't assign {}".format(value))
+            raise TypeError("Mask must be a boolean vector or [:] slice")
 
+    def __setitem__(self, item, value):
+
+        if isinstance(item, int):
+            self.container.setElement(item, value)
+            return
+
+        try:
+            print(type(self[item]))
+            print(value.eval(self[item]))
+
+        except AttributeError:
+            self[item].assign(value)
+        
         return self
 
     def __iter__(self):
+
         i, v = self.container.extractTuples()
         return iter(zip(i, v))
-
-    # returns a new container with the correct output dimensions
-    def _out_container(self, other=None):
-
-        if other is None:
-            return Vector(
-                    shape=self.shape,
-                    dtype=self.dtype
-            )
-
-        ctype = c.upcast(self.dtype, other.dtype)
-        if isinstance(other, Matrix):
-            return Vector(
-                    shape=(other.shape[0],),
-                    dtype=ctype
-            )
-
-        elif isinstance(other, Vector):
-            return Vector(
-                    shape=self.shape,
-                    dtype=ctype
-            )
 
 
 class VectorComplement(Vector):
 
     def __init__(self, vector):
+
         self.source = vector
         self.container = ~vector.container
         self.shape = vector.shape
         self.dtype = vector.dtype
 
     def __invert(self):
+
         return self.source
 

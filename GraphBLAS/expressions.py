@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
+import numpy as np
 from functools import wraps
+
 from . import c_functions as c_func
 from . import containers
 
@@ -16,7 +18,7 @@ __all__ = [
 ###############################################################################
 
 # decorator for expression.eval() to memoize results
-def lazy_eval(func):
+def memoize(func):
 
     @wraps(func)
     def new_func(self, *args, **kwargs):
@@ -28,10 +30,20 @@ def lazy_eval(func):
     return new_func
 
 
+class _NoMask(object):
+
+    def __init__(self):
+        self.container = c_func.no_mask()
+        self.dtype = None
+
+
+no_mask = _NoMask()
+
+
 class _Expression(ABC):
     
     @abstractmethod
-    def eval(self, other=None, accum=None): pass
+    def eval(self, C=None, M=no_mask, accum=None, replace_flag=False): pass
 
     @property
     def evaluated(self):
@@ -69,464 +81,408 @@ class _Expression(ABC):
 
 class BinaryExpression(_Expression):
 
-    def __init__(self, f, op, A, B, out_shape):
+    def __init__(self, f, op, A, B, C):
+
         self.f = f
         self.op = op
         self.A = A
         self.B = B
-        self.out_shape = out_shape
 
-    @lazy_eval
-    def eval(self, out=None, accum=None, replace_flag=None):
+        if C is not None:
+            return self.eval(C)
 
-        # TODO fix container construction
-        if out is None:
-            out = self.A._out_container(self.B)
+    @memoize
+    def eval(self, C=None, M=no_mask, accum=None, replace_flag=False):
 
-        # if out is not masked, apply NoMask
-        try: out = out[:]
-        except TypeError: pass
+        # construct appropriate container
+        if C is None:
+
+            c_type = c_func.upcast(self.A.dtype, self.B.dtype)
+
+            if self.f.startswith("eWise"):
+                assert(self.A.shape == self.B.shape)
+                if isinstance(self.A, containers.Matrix):
+                    C = containers.Matrix(
+                            shape=self.A.shape,
+                            dtype=c_type
+                    )
+
+                elif isinstance(self.A, containers.Vector):
+                    C = containers.Vector(
+                            shape=self.A.shape,
+                            dtype=c_type
+                    )
+
+            elif self.f == "mxm":
+                assert(self.A.shape[0] == self.B.shape[1])
+                C = containers.Matrix(
+                        shape=(self.B.shape[0], self.A.shape[1]),
+                        dtype=c_type
+                )
+
+            elif self.f == "mxv":
+                assert(self.A.shape[1] == self.B.shape[0])
+                C = containers.Vector(
+                        shape=(self.A.shape[0],),
+                        dtype=c_type
+                )
+
+            elif self.f == "vxm":
+                assert(self.A.shape[0] == self.B.shape[0])
+                C = containers.Vector(
+                        shape=(self.A.shape[0],),
+                        dtype=c_type
+                )
+
+        # TODO convert indexed to masked
+        elif isinstance(C, (IndexedVector, IndexedMatrix)):
+            pass
+
+        elif type(C) == MaskedExpression:
+            M = C.M
+            accum = C.accum
+            replace_flag = C.replace_flag
+            C = C.C
+
+        elif not isinstance(C, (containers.Matrix, containers.Vector)):
+            return NotImplemented
 
         c_func.operator(
             function        = self.f,
             operation       = self.op,
             accum           = accum,
-            replace_flag    = out.replace_flag,
+            replace_flag    = replace_flag,
             A               = self.A,
             B               = self.B,
-            C               = out.C,
-            M               = out.M
+            C               = C,
+            M               = M
         )
 
-        return out.C
+        return C
 
 
 class ApplyExpression(_Expression):
 
-    def __init__(self, f, op, A, out_shape):
-        self.f = f
+    def __init__(self, op, A, C=None):
+
         self.op = op
         self.A = A
-        self.out_shape = out_shape
 
-    @lazy_eval
-    def eval(self, out=None, accum=None, replace_flag=None):
+        if C is not None:
+            return self.eval(C)
 
-        # if evaluated with symbol notation
-        if replace_flag is None:
-            if out is None:
-                replace_flag = False
-                # TODO improve creation of output
-                out = self.A._out_container()
+    @memoize
+    def eval(self, C=None, M=no_mask, accum=None, replace_flag=False):
 
-            else:
-                replace_flag = out.replace_flag
+        if C is None:
 
-        # if out is not masked, apply NoMask
-        try: out = out[:]
-        except TypeError: pass
+            if isinstance(self.A, containers.Matrix):
+                C = containers.Matrix(
+                        shape=self.A.shape,
+                        dtype=self.A.dtype
+                )
+
+            if isinstance(self.A, containers.Vector):
+                C = containers.Vector(
+                        shape=self.A.shape,
+                        dtype=self.A.dtype
+                )
+
+        elif type(C) == MaskedExpression:
+            M = C.M
+            accum = C.accum
+            replace_flag = C.replace_flag
+            C = C.C
 
         c_func.operator(
-            function        = self.f,
+            function        = "apply",
             operation       = self.op,
             accum           = accum,
-            replace_flag    = out.replace_flag,
+            replace_flag    = replace_flag,
             A               = self.A,
-            C               = out.C,
-            M               = out.M
+            C               = C,
+            M               = M
         )
 
-        return out.C
+        return C
 
 
 class ReduceExpression(_Expression):
     
-    def __init__(self, reduce, A):
+    def __init__(self, reduce, A, C=None):
+
         self.reduce = reduce
         self.A = A
 
-    @lazy_eval
-    def eval(self, out=None, accum=None, replace_flag=None):
+        if C is not None:
+            return self.eval(C)
 
-        # if out is not masked, apply NoMask
-        try: out = out[:]
-        except TypeError: pass
+    @memoize
+    def eval(self, C=None, M=no_mask, accum=None, replace_flag=False):
 
         containers = {"A": self.A}
 
         # reduce to a scalar
-        if out is None:
+        if C is None:
             containers["C"] = self.reduce.identity
-            replace_flag = None
 
         elif isinstance(out, int):
-            containers["C"] = out
+            containers["C"] = C
 
         # reduce to a vector
+        elif isinstance(C, (containers.Vector, containers.Matrix)):
+            containers["C"] = C
+            containers["M"] = M
+            containers["accum"] = accum
+            containers["replace_flag"] = replace_flag
+
+        elif type(C) == MaskedExpression:
+            containers["C"] = C.C
+            containers["M"] = C.M
+            containers["accum"] = C.accum
+            containers["replace_flag"] = C.replace_flag
+
         else:
-            containers["C"] = out.C
-            containers["M"] = out.M
-            replace_flag = out.replace_flag
+            raise TypeError("Can't reduce to {}".format(type(C)))
 
         result = c_func.operator(
                 function        = "reduce",
                 operation       = self.reduce,
-                accum           = accum,
-                replace_flag    = replace_flag,
                 **containers
         )
 
         return result
 
+# TODO
+# indexing into MaskedExpression returns indexed expression and visa versa
 
-class _NoMask(object):
+class MaskedExpression(object):
 
-    def __init__(self):
-        self.container = c_func.no_mask()
-        self.dtype = None
-
-
-class MaskedMatrix(_Expression):
-
-    def __init__(self, C, *mask):
-
-        # if assigning into matrix, use M
-        # if extracting from matrix, use idx
+    def __init__(self, C, M=no_mask, accum=None, replace_flag=False):
 
         self.C = C
+        self.M = M
+        self.accum = accum
+        self.replace_flag = replace_flag
+
+    # self.__setitem__(item, self.__getitem(item).__iadd__(value))
+    def __iadd__(self, A):
+        from .operators import get_accum
+
+        self.accum = get_accum()
+        # TODO avoid double execution of assign
+        return A.eval(self)
+
+    # TODO masked can be converted to indexed
+    def __getitem__(self, indices):
+        pass
+
+# can be converted to AssignExpression
+class IndexedMatrix(_Expression):
+
+    def __init__(self, A, indices):
+
+        self.A = A
         self.idx = dict()
-        self.replace_flag = False
 
-        # TODO only allow replace with mask, not slice
+        # convert 1D index to 2D
+        if len(indices) == 1 and indices[0] == slice(None, None, None):
+            indices = (*indices, *indices)
 
-        # replace flag
-        if len(mask) > 0 and type(mask[-1]) is bool:
-            *mask, self.replace_flag = mask
+        for i, s, dim in zip(indices, A.shape, ("row", "col")):
 
-        # container mask (LHS)
-        if len(mask) == 1 and isinstance(mask, containers.Matrix):
-            self.M = mask
+            if isinstance(i, slice): 
+                self.idx[dim + "_indices"] = range(*i.indices(s))
 
-        # NoMask (LHS)
-        if all(m == slice(None, None, None) for m in mask):
-            self.M = _NoMask()
+            elif isinstance(i, (list, np.ndarray)):
+                self.idx[dim + "_indices"] = i
 
-            # convert 1D index to 2D
-            if len(mask) == 1:
-                mask = (*mask, *mask)
+            elif isinstance(i, int):
+                self.idx[dim + "_index"] = i
 
-        # slice or number index
-        if len(mask) == 2:
-
-            # element accessor
-            if all(isinstance(i, int) for i in mask):
-                self.idx["index"] = mask
-
-            # Matrix index
             else:
-                for i, s, dim in zip(mask, C.shape, ("row", "col")):
-                    if isinstance(i, slice): 
-                        self.idx[dim + "_indices"] = range(*i.indices(s))
-
-                    elif isinstance(i, (list, np.array)):
-                        self.idx[dim + "_indices"] = i
-
-                    elif isinstance(i, int):
-                        self.idx[dim + "_index"] = i
-                    
-                    else:
-                        raise TypeError("Mask indices can be slice, list or int")
-
-        # TODO
-        elif len(mask) > 0:
-            raise TypeError("Mask must be boolean Matrix or 2D slice with optional replace flag")
-
-    # converts row/col indices into matrix mask
-    @property
-    def M(self):
-        # if mask is set
-        if hasattr(self, "_M"):
-            return self._M
-        
-        # if indices are set
-        if "row_indices" in self.idx:
-            rows = self.idx["row_indices"]
-        elif "row_index" in self.idx:
-            rows = [self.idx["row_index"]]
-        else:
-            self._M = NoMask()
-            return self.M
-
-        if "col_indices" in self.idx:
-            cols = self.idx["col_indices"]
-        elif "col_index" in self.idx:
-            cols = [self.idx["col_index"]]
-        else:
-            self._M = NoMask()
-            return self.M
-
-        i, j = zip(*product(rows, cols))
-
-        self._M = containers.Matrix(
-                ([True] * len(i), (i, j)), 
-                shape=self.C.shape, 
-                dtype=bool
-        )
-
-        return self._M
-
-    @M.setter
-    def M(self, M):
-        self._M = M
+                raise TypeError("Mask indices can be slice, list or int")
 
     # accum expression will be evaluated by __setitem__ of underlying container
-    def __iadd__(self, other):
-        return AccumExpression(other)
+    # self.__setitem__(item, self.__getitem__(item).__iadd__(value))
+    def __iadd__(self, A):
+        from .operators import get_accum
 
-    def eval(self, out=None, accum=None, replace_flag=None):
-        return self.extract(out, accum, replace_flag)
+        self.accum = get_accum()
+        # TODO avoid double execution
+        return A.eval(self)
 
-    @lazy_eval
-    def extract(self, out, accum=None, replace_flag=None):
+    # TODO can be masked if dim(M) == dim(idx)
+    def __getitem__(self, item):
 
-        if "index" in self.idx:
-            return self.C.container.extractElement(*self.idx["index"])
-    
-        # evaluate expression from 
-        if replace_flag is None:
-            if out is None:
-                replace_flag = False
-            else:
-                replace_flag = out.replace_flag
+        if item == slice(None, None, None):
+            return self
+
+        else:
+            return NotImplemented
+
+    @memoize
+    def eval(self, C=None, M=no_mask, accum=None, replace_flag=False):
 
         # construct container of correct shape and size to extract to
-        if out is None:
+        if C is None:
 
+            # extract row
             if "row_index" in self.idx:
-                out = containers.Vector(
+                C = containers.Vector(
                         shape=(len(self.idx["col_indices"]),),
                         dtype = self.C.dtype
                 )
 
+            # extract column
             elif "col_index" in self.idx:
-                out = containers.Vector(
+                C = containers.Vector(
                         shape=(len(self.idx["row_indices"]),),
                         dtype = self.C.dtype
                 )
 
+            # extract submatrix
             else:
-                out = containers.Matrix(
+                C = containers.Matrix(
                         shape=(
                             len(self.idx["row_indices"]), 
                             len(self.idx["col_indices"])
                         ),
-                        dtype=self.C.dtype
-                )[:]
+                        dtype=self.A.dtype
+                )
+
+        elif type(C) == MaskedExpression:
+            M = C.M
+            # TODO decide on this fallback behavior
+            accum = C.accum if C.accum is not None else accum
+            replace_flag = C.replace_flag if C.replace_flag is not None else replace_flag
+            C = C.C
 
         result = c_func.operator(
                 function        = "extract",
                 accum           = accum,
-                replace_flag    = self.replace_flag,
-                C               = out.C,
-                M               = out.M,
-                A               = self.C,
+                replace_flag    = replace_flag,
+                C               = C,
+                M               = M,
+                A               = self.A,
                 **self.idx
         )
 
-        return out.C
+        return C
                     
-    @lazy_eval
-    def assign(self, assign, accum=None, replace_flag=None):
+    @memoize
+    def assign(self, A):
 
-        if isinstance(assign, self.C.dtype):
+        if isinstance(A, _Expression):
+            A = A.eval()
+   
+        # constant assignment to indices
+        elif isinstance(A, self.A.dtype):
+            if "row_index" in self.idx:
+                self.idx["row_indices"] = [self.idx["row_index"]]
+                del self.idx["row_index"]
 
-            # element setter
-            if "index" in self.idx:
-                self.C.container.setElement(*self.idx["index"], assign)
-                return
+            if "col_index" in self.idx:
+                self.idx["col_indices"] = [self.idx["col_index"]]
+                del self.idx["col_index"]
 
-            # constant assignment to indices
-            else:
-                A = assign
-                # full index
-                idx = self.C[:].idx
+        elif not isinstance(A, containers.Matrix):
+            raise TypeError("Can't assign from non-matrix type")
 
-        else:
-            # if assigning un-indexed container
-            if isinstance(assign, Matrix):
-                assign = assign[:]
-
-            A = assign.C
-            idx = assign.idx
-
+        # TODO get params from somewhere
         c_func.operator(
                 function        = "assign",
-                replace_flag    = self.replace_flag,
-                accum           = accum,
-                C               = self.C,
-                M               = self.M,
+                replace_flag    = False,
+                accum           = None,
+                C               = self.A,
+                M               = no_mask,
                 A               = A,
-                **idx
+                **self.idx
         )
 
-        return self.C
+        return self.A
 
 
-class MaskedVector(_Expression):
+class IndexedVector(_Expression):
 
-    def __init__(self, C, *mask):
+    def __init__(self, A, index):
 
-        # if assigning into matrix, use M
-        # if extracting from matrix, use idx
-
-        self.C = C
+        self.A = A
+        self.accum = None
         self.idx = dict()
-        self.replace_flag = False
 
-        # TODO only allow replace with mask, not slice
+        if isinstance(index, slice): 
+            self.idx["indices"] = range(*index.indices(self.A.shape[0]))
 
-        # replace flag
-        if len(mask) > 0 and type(mask[-1]) is bool:
-            *mask, self.replace_flag = mask
-
-        # container mask (LHS)
-        if len(mask) == 1 and isinstance(mask, containers.Vector):
-            self.M = mask
-
-        # NoMask (LHS)
-        if mask == (slice(None, None, None),):
-            self.M = _NoMask()
-
-        # slice or number index
-        if len(mask) == 1:
-
-            i = mask[0]
-
-            # element accessor
-            if isinstance(i, int):
-                self.idx["index"] = mask
-
-            # Vector index
-            elif isinstance(i, slice):
-                self.idx["indices"] = range(*i.indices(*C.shape))
-
-            elif isinstance(i, (list, np.array)):
-                self.idx["indices"] = i
-
-            else:
-                raise TypeError("Mask must be boolean Matrix or 2D slice with optional replace flag")
-
-        elif len(mask) > 0:
-            raise TypeError("Mask must be boolean Matrix or 2D slice with optional replace flag")
-
-    # converts row/col indices into matrix mask
-    @property
-    def M(self):
-        # if mask is set
-        if hasattr(self, "_M"):
-            return self._M
-        
-        # if indices are set
-        if "indices" in self.idx:
-
-            i = self.idx["indices"]
-            self._M = containers.Vector(
-                    ([True] * len(i), i),
-                    shape=self.C.shape,
-                    dtype=bool
-            )
+        elif isinstance(index, (list, np.ndarray)):
+            self.idx["indices"] = i
 
         else:
-            self._M = _NoMask()
-
-        return self._M
-
-    @M.setter
-    def M(self, M):
-        self._M = M
+            raise TypeError("Mask must be boolean Matrix or 2D slice with optional replace flag")
 
     # TODO fix broken shit
     # accum expression will be evaluated by __setitem__ of underlying container
-    def __iadd__(self, other):
-        return AccumExpression(other)
+    # self.__setitem__(item, self.__getitem__(item).__iadd__(value))
+    def __iadd__(self, A):
+        from .operators import get_accum
 
-    def eval(self, out=None, accum=None, replace_flag=None):
-        return self.extract(out, accum, replace_flag)
+        self.accum = get_accum()
+        return A.eval(self)
 
-    @lazy_eval
-    def extract(self, out, accum=None, replace_flag=None):
+    def __getitem__(self, item):
 
-        if "index" in self.idx:
-            return self.C.container.extractElement(*self.idx["index"])
-    
-        # evaluate expression from operator notation
-        if replace_flag is None:
-            if out is None:
-                replace_flag = False
-            else:
-                replace_flag = out.replace_flag
+        if item == slice(None, None, None):
+            return self
+        else:
+            return NotImplemented
 
-        # construct container to extract to
-        if out is None:
+    def eval(self, C=None, M=no_mask, accum=None, replace_flag=False):
 
-            out = containers.Vector(
-                    shape=(len(self.idx["indices"]),), 
-                    dtype=self.C.dtype
-            )[:]
+        if C is None:
+
+            C = containers.Vector(
+                    shape=(len(self.idx["indices"]),),
+                    dtype=self.A.dtype
+            )
+
+        elif type(C) == MaskedExpression:
+            M = C.M
+            # TODO decide on this fallback behavior
+            accum = C.accum if C.accum is not None else accum
+            replace_flag = C.replace_flag if C.replace_flag is not None else replace_flag
+            C = C.C
 
         result = c_func.operator(
                 function        = "extract",
                 accum           = accum,
-                replace_flag    = self.replace_flag,
-                C               = out.C,
-                M               = out.M,
-                A               = self.C,
+                replace_flag    = replace_flag,
+                C               = C,
+                M               = M,
+                A               = self.A,
                 **self.idx
         )
 
-        return out.C
-                    
-    @lazy_eval
-    def assign(self, assign, accum=None, replace_flag=None):
+        return C
+
+    @memoize
+    def assign(self, A):
 
         # TODO default replace flag?
-        if isinstance(assign, self.C.dtype):
+        if isinstance(A, _Expression):
+            A = A.eval()
 
-            # element setter
-            if "index" in self.idx:
-                self.C.container.setElement(*self.idx["index"], assign)
-                return
-
-            # TODO figure out masking vs indexing
-            # constant assignment to indices
-            else:
-                A = assign
-                # full index
-                idx = self.C[:].idx
-
-        else:
-            # if assigning un-indexed container
-            if isinstance(assign, Vector):
-                assign = assign[:]
-
-            A = assign.C
-            idx = assign.idx
+        elif not isinstance(A, containers.Vector):
+            raise TypeError("Can't assign from non-matrix type")
 
         c_func.operator(
                 function        = "assign",
-                replace_flag    = self.replace_flag,
-                accum           = accum,
-                C               = self.C,
-                M               = self.M,
+                replace_flag    = False,
+                accum           = self.accum,
+                C               = self.A,
+                M               = no_mask,
                 A               = A,
-                **idx
+                **self.idx
         )
 
-        return self.C
-
-# TODO better interface
-class AccumExpression(_Expression):
-
-    def __init__(self, expr):
-        self.expr = expr
+        return self.A
 
