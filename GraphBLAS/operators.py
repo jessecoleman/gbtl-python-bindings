@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 from attr import attrs, attrib
 from contextlib import ContextDecorator
 from functools import wraps
-from itertools import product
 import numpy as np
 
 from . import expressions as expr
@@ -212,73 +211,99 @@ def operator_type(op_type):
 
     return wrapper
             
+def eval_expressions(function):
+
+    @wraps(function)
+    def new_func(*args):
+
+        args = list(args)
+
+        for i, arg in enumerate(args):
+            if isinstance(arg, expr._Expression):
+                args[i] = arg.eval()
+
+        return function(*args)
+
+    return new_func
+
+@eval_expressions
 @operator_type(Semiring)
 def mxm(semiring, A, B, C=None):
 
     if A.shape[0] == B.shape[1]:
-        return expr.BinaryExpression("mxm", semiring, A, B, C)
+        return expr.MXM(semiring, A, B, C)
 
     else:
         raise Error("rows of A and columns of B must be equal")
 
+@eval_expressions
 @operator_type(Semiring)
 def vxm(semiring, A, B, C=None):
 #def vxm(C, M, accum, semiring, A, B, replace_flag):
 
     if A.shape[0] == B.shape[0]:
-        return expr.BinaryExpression("vxm", semiring, A, B, C)
+        return expr.VXM(semiring, A, B, C)
 
     else:
         raise Error("length of A and columns of B must be equal")
 
+@eval_expressions
 @operator_type(Semiring)
 def mxv(semiring, A, B, C=None):
 
     if A.shape[1] == B.shape[0]:
-        return expr.BinaryExpression("mxv", semiring, A, B, C)
+        return expr.MXV(semiring, A, B, C)
 
     else:
         raise Error("rows of A and length of B must be equal")
 
 
+@eval_expressions
 @operator_type(BinaryOp)
 def eWiseMult(binary_op, A, B, C=None):
 
     if 1 == len(A.shape) == len(B.shape):
-        return expr.BinaryExpression("eWiseMultVector", binary_op, A, B, C)
+        return expr.EWiseMultVector(binary_op, A, B, C)
 
     elif 2 == len(A.shape) == len(B.shape):
-        return expr.BinaryExpression("eWiseMultMatrix", binary_op, A, B, C)
+        return expr.EWiseMultMatrix(binary_op, A, B, C)
 
     else:
         raise Error("A and B must have the same dimension")
 
 
+@eval_expressions
 @operator_type(BinaryOp)
 def eWiseAdd(binary_op, A, B, C=None):
 
     if 1 == len(A.shape) == len(B.shape):
-        return expr.BinaryExpression("eWiseAddVector", binary_op, A, B, C)
+        return expr.EWiseAddVector(binary_op, A, B, C)
 
     elif 2 == len(A.shape) == len(B.shape):
-        return expr.BinaryExpression("eWiseAddMatrix", binary_op, A, B, C)
+        return expr.EWiseAddMatrix(binary_op, A, B, C)
 
     else:
         raise Error("A and B must have the same dimension")
 
+@eval_expressions
 @operator_type(UnaryOp)
 def apply(unary_op, A, C=None):
 
-    return expr.ApplyExpression(unary_op, A, C)
+    if 2 == len(A.shape):
+        return expr.ApplyMatrix(unary_op, A, C)
 
+    elif 1 == len(A.shape):
+        return expr.ApplyVector(unary_op, A, C)
+
+@eval_expressions
 @operator_type(Monoid)
 def reduce(monoid, A, C=None):
 
     return expr.ReduceExpression(monoid, A, C)
 
 # TODO
+@eval_expressions
 def extract(A, indices=None, C=None, M=None, accum=None, replace_flag=False):
-#def extract(A, C=None, M=None, accum=None, replace_flag=False):
     
     if len(A.shape) == 2:
         idx = expr.IndexedMatrix(A, indices)
@@ -292,14 +317,22 @@ def extract(A, indices=None, C=None, M=None, accum=None, replace_flag=False):
     else:
         return idx
 
-def assign(A, M, C=None):
+@eval_expressions
+def assign(A, indices=None, C=None, M=None, accum=None, replace_flag=False):
 
     if len(A.shape) == 2:
-        return expr.MaskedExpression(A, M, C)
-
+        idx = expr.IndexedMatrix(A, indices)
+        
     elif len(A.shape) == 1:
-        return expr.MaskedExpression(A, M, C)
+        idx = expr.IndexedVector(A, indices)
 
+    if C is not None:
+        return idx.eval(C, M, accum, replace_flag)
+
+    else:
+        return idx
+
+@eval_expressions
 def transpose(A, C=None):
 
     return expr.TransposeExpression(A, C)

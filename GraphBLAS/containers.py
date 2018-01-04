@@ -135,8 +135,7 @@ class Matrix(object):
         return apply(AdditiveInverse, self)
 
     def __getitem__(self, item):
-        from .operators import extract
-        from .expressions import IndexedMatrix
+        from .expressions import IndexedMatrix, MaskedMatrix
 
         if type(item) != tuple:
             item = (item,)
@@ -144,40 +143,37 @@ class Matrix(object):
         if len(item) == 2 and all(isinstance(i, int) for i in item):
             return self.container.extractElement(*item)
 
-        # item[M], item[M, flag], item[:], item[:, :], item[:, :, flag]
-
-        # assign/extract expression
-        if all(isinstance(i, (int, slice, list, np.array)) for i in item):
-            return IndexedMatrix(self, item)
-
         # LHS expression
         replace_flag = False
 
         if type(item[-1]) is bool:
-            *mask, replace_flag = item
+            *item, replace_flag = item
 
-        if len(mask) == 1 and isintance(mask[0], Matrix):
-            return MaskedExpression(
+        if len(item) == 1 and isintance(item[0], Matrix):
+            return MaskedMatrix(
                     self, 
-                    mask=mask[0], 
-                    replace_flag=replace_flag
+                    M = item[0], 
+                    replace_flag = replace_flag
             )
 
-        elif all(i == slice(None, None, None) for i in mask):
-            return MaskedExpression(self, replace_flag=replace_flag)
+        elif all(i == slice(None, None, None) for i in item):
+            return MaskedMatrix(self, replace_flag=replace_flag)
+
+        # assign/extract expression
+        elif all(isinstance(i, (int, slice, list, np.array)) for i in item):
+            return IndexedMatrix(self, item)
 
         else:
             raise TypeError("Mask must be a boolean matrix or [:] slice")
 
     def __setitem__(self, item, value):
-        from .expressions import _Expression, MaskedExpression
 
         if len(item) == 2 and all(isinstance(i, int) for i in item):
             self.container.setElement(*item, value)
             return
 
         # TODO handle other improper input
-        # if value is expression and self[item] is maskedexpression
+        # if type(value) is Expression and self[item] is MaskedMatrix
         try:
             value.eval(self[item])
 
@@ -335,14 +331,10 @@ class Vector(object):
         return apply(AdditiveInverse, self)
 
     def __getitem__(self, item):
-        from .expressions import IndexedVector
+        from .expressions import IndexedVector, MaskedVector
 
         if isinstance(item, int):
             return self.container.extractElement(item)
-
-        # assign/extract expression
-        if isinstance(item, (int, slice, list, np.array)):
-            return IndexedVector(self, item)
 
         if type(item) != tuple:
             item = (item,)
@@ -351,17 +343,28 @@ class Vector(object):
         replace_flag = False
 
         if type(item[-1]) is bool:
-            *mask, replace_flag = item
+            *item, replace_flag = item
 
-        if len(mask) == 1 and isintance(mask[0], Vector):
-            return MaskedExpression(
-                    self, 
-                    mask=mask[0], 
-                    replace_flag=replace_flag
-            )
+        if len(item) == 1:
 
-        elif i[0] == slice(None, None, None):
-            return MaskedExpression(self, replace_flag=replace_flag)
+            item = item[0]
+
+            if isinstance(item, Vector):
+                return MaskedVector(
+                        self, 
+                        M = item, 
+                        replace_flag = replace_flag
+                )
+
+            elif item == slice(None, None, None):
+                return MaskedVector(self, replace_flag = replace_flag)
+
+            # assign/extract expression
+            elif len(item) == 1 and isinstance(item[0], (int, slice, list, np.array)):
+                return IndexedVector(self, item)
+
+            else:
+                raise TypeError("Mask must be a boolean vector or [:] slice")
 
         else:
             raise TypeError("Mask must be a boolean vector or [:] slice")
@@ -372,10 +375,11 @@ class Vector(object):
             self.container.setElement(item, value)
             return
 
+        # if RHS is expression, try evaluating it into masked self
         try:
-            print(type(self[item]))
-            print(value.eval(self[item]))
+            value.eval(self[item])
 
+        # else assign RHS into masked self
         except AttributeError:
             self[item].assign(value)
         

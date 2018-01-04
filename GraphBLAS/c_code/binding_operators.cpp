@@ -162,6 +162,7 @@ void eWiseAddVector(
     )
 { GraphBLAS::eWiseAdd(C, M, AccumT(), AddBinaryOp(), A, B, replace_flag); }
 
+// TODO decide if MultBinaryOp is necessary or if any binary op is OK
 #elif defined(EWISEMULTMATRIX)
 void eWiseMultMatrix(
         CMatrixT       &C,
