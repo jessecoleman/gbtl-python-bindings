@@ -149,7 +149,7 @@ class Matrix(object):
         if type(item[-1]) is bool:
             *item, replace_flag = item
 
-        if len(item) == 1 and isintance(item[0], Matrix):
+        if len(item) == 1 and isinstance(item[0], Matrix):
             return MaskedMatrix(
                     self, 
                     M = item[0], 
@@ -173,13 +173,7 @@ class Matrix(object):
             return
 
         # TODO handle other improper input
-        # if type(value) is Expression and self[item] is MaskedMatrix
-        try:
-            value.eval(self[item])
-
-        # elif self[item] is assign expression
-        except:
-            self[item].assign(value)
+        self[item].assign(value)
 
         return self
 
@@ -375,13 +369,7 @@ class Vector(object):
             self.container.setElement(item, value)
             return
 
-        # if RHS is expression, try evaluating it into masked self
-        try:
-            value.eval(self[item])
-
-        # else assign RHS into masked self
-        except AttributeError:
-            self[item].assign(value)
+        self[item].assign(value)
         
         return self
 

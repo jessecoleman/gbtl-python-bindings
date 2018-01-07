@@ -1,6 +1,7 @@
 import GraphBLAS as gb
 from GraphBLAS.operators import *
 from GraphBLAS import algorithms
+from GraphBLAS import utilities
 
 def index_of_1based(vector):
     i, j, v = [],[],[]
@@ -19,8 +20,6 @@ def index_of_1based(vector):
 
 def bfs(graph, wavefront, parent_list):
 
-    #algorithms.bfs(graph, wavefront, parent_list)
-
     parent_list = index_of_1based(parent_list)
 
     while wavefront.nvals > 0:
@@ -33,9 +32,9 @@ def bfs(graph, wavefront, parent_list):
         with ArithmeticAccumulate:
             parent_list[:] += wavefront
 
-    subtract_1 = Apply("Minus", 1)
+    subtract_1 = UnaryOp("Minus", 1)
 
-    parent_list[:,True] = subtract_1(parent_list)
+    parent_list[:,True] = apply(subtract_1, parent_list)
 
     print("FINAL", parent_list)
 
@@ -122,11 +121,19 @@ v = [1] * len(i)
 
 w = ([1], [30])
 
-graph = gb.Matrix((v, (i, j)), shape=(34,34))
+graph = gb.Matrix((v, (i, j)), shape=(34,34), dtype=float)
 wavefront = gb.Vector(w, shape=(34,))
 parent_list = gb.Vector(w, shape=(34,))
 
-print(wavefront)
+start = time.time()
+for i in range(100000):
+    bfs(graph, wavefront, parent_list)
+end = time.time()
+print(end - start)
 
-bfs(graph, wavefront, parent_list)
+start = time.time()
+for i in range(100000):
+    bfs(graph, wavefront, parent_list)
+end = time.time()
+print(end - start)
 

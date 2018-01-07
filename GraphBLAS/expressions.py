@@ -29,6 +29,18 @@ def memoize(func):
 
     return new_func
 
+def convert_mask(func):
+
+    @wraps(func)
+    def new_func(self, C=None, M=no_mask, accum=None, replace_flag=False):
+
+        if type(C) == MaskedMatrix or type(C) == MaskedVector:
+            return func(self, C.C, C.M, C.accum, C.replace_flag)
+        
+        else:
+            return func(self, C, M, accum, replace_flag)
+
+    return new_func
 
 class _NoMask(object):
 
@@ -56,14 +68,32 @@ class MaskedMatrix(object):
         from .operators import get_accum
 
         self.accum = get_accum()
-        # TODO avoid double execution of assign
-        return A.eval(self)
+
+        if isinstance(A, _Expression):
+            # TODO avoid double execution of assign
+            return A.eval(self)
+
+        else:
+            return NotImplemented
 
     # masked can be converted to indexed
     def __getitem__(self, indices):
         if indices == slice(None, None, None) or len(indices) == 2:
             return IndexedMatrix(self, indices)
-        
+
+    def assign(self, A):
+
+        # evaluate expression into self
+        if isinstance(A, _Expression):
+            return A.eval(self)
+
+        # copy constructor
+        elif isinstance(A, containers.Vector):
+            return IndexedVector(A, slice(None, None, None)).eval(self) 
+
+        else:
+            return NotImplemented
+
 
 class MaskedVector(object):
 
@@ -86,6 +116,19 @@ class MaskedVector(object):
     def __getitem__(self, indices):
         if len(indices) == 1:
             return IndexedVector(self, indices)
+
+    def assign(self, A):
+
+        # evaluate expression into self
+        if isinstance(A, _Expression):
+            return A.eval(self)
+
+        # copy constructor
+        elif isinstance(A, containers.Vector):
+            return IndexedVector(A, slice(None, None, None)).eval(self) 
+
+        else:
+            return NotImplemented
 
 
 class _Expression(ABC):
@@ -142,7 +185,8 @@ class _BinaryExpression(_Expression):
 class EWiseAddMatrix(_BinaryExpression):
 
     @memoize
-    def eval(self, C=None, M=no_mask, accum=None, replace_flag=False):
+    @convert_mask
+    def eval(self, C, M, accum, replace_flag):
 
         assert(self.A.shape == self.B.shape)
 
@@ -159,12 +203,6 @@ class EWiseAddMatrix(_BinaryExpression):
         # TODO convert indexed to masked
         elif isinstance(C, IndexedMatrix):
             pass
-
-        elif type(C) == MaskedMatrix:
-            M = C.M
-            accum = C.accum
-            replace_flag = C.replace_flag
-            C = C.C
 
         elif not isinstance(C, containers.Matrix):
             return NotImplemented
@@ -186,7 +224,8 @@ class EWiseAddMatrix(_BinaryExpression):
 class EWiseAddVector(_BinaryExpression):
 
     @memoize
-    def eval(self, C=None, M=no_mask, accum=None, replace_flag=False):
+    @convert_mask
+    def eval(self, C, M, accum, replace_flag):
 
         assert(self.A.shape == self.B.shape)
 
@@ -203,12 +242,6 @@ class EWiseAddVector(_BinaryExpression):
         # TODO convert indexed to masked
         elif isinstance(C, IndexedVector):
             pass
-
-        elif type(C) == MaskedVector:
-            M = C.M
-            accum = C.accum
-            replace_flag = C.replace_flag
-            C = C.C
 
         elif not isinstance(C, containers.Vector):
             return NotImplemented
@@ -230,7 +263,8 @@ class EWiseAddVector(_BinaryExpression):
 class EWiseMultMatrix(_BinaryExpression):
 
     @memoize
-    def eval(self, C=None, M=no_mask, accum=None, replace_flag=False):
+    @convert_mask
+    def eval(self, C, M, accum, replace_flag):
 
         assert(self.A.shape == self.B.shape)
 
@@ -247,12 +281,6 @@ class EWiseMultMatrix(_BinaryExpression):
         # TODO convert indexed to masked
         elif isinstance(C, IndexedMatrix):
             pass
-
-        elif type(C) == MaskedMatrix:
-            M = C.M
-            accum = C.accum
-            replace_flag = C.replace_flag
-            C = C.C
 
         elif not isinstance(C, containers.Matrix):
             return NotImplemented
@@ -274,7 +302,8 @@ class EWiseMultMatrix(_BinaryExpression):
 class EWiseMultVector(_BinaryExpression):
 
     @memoize
-    def eval(self, C=None, M=no_mask, accum=None, replace_flag=False):
+    @convert_mask
+    def eval(self, C, M, accum, replace_flag):
 
         assert(self.A.shape == self.B.shape)
 
@@ -291,12 +320,6 @@ class EWiseMultVector(_BinaryExpression):
         # TODO convert indexed to masked
         elif isinstance(C, IndexedVector):
             pass
-
-        elif type(C) == MaskedVector:
-            M = C.M
-            accum = C.accum
-            replace_flag = C.replace_flag
-            C = C.C
 
         elif not isinstance(C, containers.Vector):
             return NotImplemented
@@ -318,7 +341,8 @@ class EWiseMultVector(_BinaryExpression):
 class MXM(_BinaryExpression):
 
     @memoize
-    def eval(self, C=None, M=no_mask, accum=None, replace_flag=False):
+    @convert_mask
+    def eval(self, C, M, accum, replace_flag):
 
         # construct appropriate container
         if C is None:
@@ -334,12 +358,6 @@ class MXM(_BinaryExpression):
         # TODO convert indexed to masked
         elif isinstance(C, IndexedMatrix):
             pass
-
-        elif type(C) == MaskedMatrix:
-            M = C.M
-            accum = C.accum
-            replace_flag = C.replace_flag
-            C = C.C
 
         elif not isinstance(C, containers.Matrix):
             return NotImplemented
@@ -361,7 +379,8 @@ class MXM(_BinaryExpression):
 class MXV(_BinaryExpression):
 
     @memoize
-    def eval(self, C=None, M=no_mask, accum=None, replace_flag=False):
+    @convert_mask
+    def eval(self, C, M, accum, replace_flag):
 
         # construct appropriate container
         if C is None:
@@ -377,12 +396,6 @@ class MXV(_BinaryExpression):
         # TODO convert indexed to masked?
         elif isinstance(C, IndexedVector):
             pass
-
-        elif type(C) == MaskedVector:
-            M = C.M
-            accum = C.accum
-            replace_flag = C.replace_flag
-            C = C.C
 
         elif not isinstance(C, containers.Vector):
             return NotImplemented
@@ -404,7 +417,8 @@ class MXV(_BinaryExpression):
 class VXM(_BinaryExpression):
 
     @memoize
-    def eval(self, C=None, M=no_mask, accum=None, replace_flag=False):
+    @convert_mask
+    def eval(self, C, M, accum, replace_flag):
 
         # construct appropriate container
         if C is None:
@@ -420,12 +434,6 @@ class VXM(_BinaryExpression):
         # TODO convert indexed to masked
         elif isinstance(C, IndexedVector):
             pass
-
-        elif type(C) == MaskedVector:
-            M = C.M
-            accum = C.accum
-            replace_flag = C.replace_flag
-            C = C.C
 
         elif not isinstance(C, containers.Vector):
             return NotImplemented
@@ -455,7 +463,8 @@ class ApplyMatrix(_Expression):
             return self.eval(C)
 
     @memoize
-    def eval(self, C=None, M=no_mask, accum=None, replace_flag=False):
+    @convert_mask
+    def eval(self, C, M, accum, replace_flag):
 
         if C is None:
 
@@ -463,12 +472,6 @@ class ApplyMatrix(_Expression):
                     shape=self.A.shape,
                     dtype=self.A.dtype
             )
-
-        elif type(C) == MaskedMatrix:
-            M = C.M
-            accum = C.accum
-            replace_flag = C.replace_flag
-            C = C.C
 
         c_func.operator(
             function        = "apply",
@@ -494,7 +497,8 @@ class ApplyVector(_Expression):
             return self.eval(C)
 
     @memoize
-    def eval(self, C=None, M=no_mask, accum=None, replace_flag=False):
+    @convert_mask
+    def eval(self, C, M, accum, replace_flag):
 
         if C is None:
 
@@ -502,12 +506,6 @@ class ApplyVector(_Expression):
                     shape=self.A.shape,
                     dtype=self.A.dtype
             )
-
-        elif type(C) == MaskedVector:
-            M = C.M
-            accum = C.accum
-            replace_flag = C.replace_flag
-            C = C.C
 
         c_func.operator(
             function        = "apply",
@@ -648,7 +646,8 @@ class IndexedMatrix(_Expression):
             return NotImplemented
 
     @memoize
-    def eval(self, C=None, M=no_mask, accum=None, replace_flag=False):
+    @convert_mask
+    def eval(self, C, M, accum, replace_flag):
 
         # construct container of correct shape and size to extract to
         if C is None:
@@ -676,12 +675,6 @@ class IndexedMatrix(_Expression):
                         ),
                         dtype=self.A.dtype
                 )
-
-        elif type(C) == MaskedExpression:
-            M = C.M
-            accum = C.accum
-            replace_flag = C.replace_flag
-            C = C.C
 
         result = c_func.operator(
                 function        = "extract",
@@ -764,7 +757,9 @@ class IndexedVector(_Expression):
         else:
             return NotImplemented
 
-    def eval(self, C=None, M=no_mask, accum=None, replace_flag=False):
+    @memoize
+    @convert_mask
+    def eval(self, C, M, accum, replace_flag):
 
         if C is None:
 
@@ -772,12 +767,6 @@ class IndexedVector(_Expression):
                     shape=(len(self.idx["indices"]),),
                     dtype=self.A.dtype
             )
-
-        elif type(C) == MaskedExpression:
-            M = C.M
-            accum = C.accum
-            replace_flag = C.replace_flag
-            C = C.C
 
         result = c_func.operator(
                 function        = "extract",
