@@ -85,7 +85,7 @@ class BinaryOp(_Op, ContextDecorator):
     first       = "First"
     second      = "Second"
 
-    def __init__(a_binary_op):
+    def __init__(self, a_binary_op):
         self.a_binary_op = a_binary_op
 
 
@@ -299,7 +299,11 @@ def apply(unary_op, A, C=None):
 @operator_type(Monoid)
 def reduce(monoid, A, C=None):
 
-    return expr.ReduceExpression(monoid, A, C)
+    if 2 == len(A.shape):
+        return expr.ReduceMatrix(monoid, A, C)
+
+    elif 1 == len(A.shape):
+        return expr.ReduceVector(monoid, A, C)
 
 # TODO
 @eval_expressions

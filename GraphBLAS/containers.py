@@ -168,6 +168,9 @@ class Matrix(object):
 
     def __setitem__(self, item, value):
 
+        if type(item) != tuple:
+            item = (item,)
+
         if len(item) == 2 and all(isinstance(i, int) for i in item):
             self.container.setElement(*item, value)
             return
@@ -252,13 +255,13 @@ class Vector(object):
             if shape is not None: self.shape = shape
             else: self.shape = (max(idx) + 1,)
             self.container = module.init_sparse_vector(
-                    *self.shape, idx, data
+                    self.shape, idx, data
             )
 
         else:
             self.shape = shape
             self.container = module.init_sparse_vector(
-                    *self.shape, [], []
+                    self.shape, [], []
             )
 
     def __repr__(self):
@@ -368,6 +371,9 @@ class Vector(object):
         if isinstance(item, int):
             self.container.setElement(item, value)
             return
+
+        if type(item) != tuple:
+            item = (item,)
 
         self[item].assign(value)
         

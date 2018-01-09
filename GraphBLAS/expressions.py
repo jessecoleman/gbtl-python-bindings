@@ -169,6 +169,10 @@ class _Expression(ABC):
     def __getitem__(self, item):
         return self.evaluated[item]
 
+    def __setitem__(self, item, value):
+        self.evaluated[item] = value
+        return self
+
 
 class _BinaryExpression(_Expression):
 
@@ -474,7 +478,7 @@ class ApplyMatrix(_Expression):
             )
 
         c_func.operator(
-            function        = "apply",
+            function        = "applyMatrix",
             operation       = self.op,
             accum           = accum,
             replace_flag    = replace_flag,
@@ -508,7 +512,7 @@ class ApplyVector(_Expression):
             )
 
         c_func.operator(
-            function        = "apply",
+            function        = "applyVector",
             operation       = self.op,
             accum           = accum,
             replace_flag    = replace_flag,
@@ -531,8 +535,10 @@ class ReduceMatrix(_Expression):
             return self.eval(C)
 
     @memoize
+    @convert_mask
     def eval(self, C=None, M=no_mask, accum=None, replace_flag=False):
 
+        function = "reduceMatrix"
         kwargs = {"A": self.A}
 
         # reduce to a scalar
@@ -545,23 +551,17 @@ class ReduceMatrix(_Expression):
 
         # reduce to a vector
         elif isinstance(C, containers.Vector):
+            function = "reduceMatrixVector"
             kwargs["C"] = C
             kwargs["M"] = M
             kwargs["accum"] = accum
             kwargs["replace_flag"] = replace_flag
 
-        # reduce to a masked vector
-        elif type(C) == MaskedVector:
-            kwargs["C"] = C.C
-            kwargs["M"] = C.M
-            kwargs["accum"] = C.accum
-            kwargs["replace_flag"] = C.replace_flag
-
         else:
             raise TypeError("Can't reduce to {}".format(type(C)))
 
         result = c_func.operator(
-                function        = "reduce",
+                function        = function,
                 operation       = self.reduce,
                 **kwargs
         )
@@ -590,7 +590,7 @@ class ReduceVector(_Expression):
             raise TypeError("Can't reduce to {}".format(type(C)))
 
         result = c_func.operator(
-                function        = "reduce",
+                function        = "reduceVector",
                 operation       = self.reduce,
                 accum           = accum,
                 replace_flag    = replace_flag,
@@ -654,6 +654,7 @@ class IndexedMatrix(_Expression):
 
             # extract row
             if "row_index" in self.idx:
+                function = "extractMatrixRow"
                 C = containers.Vector(
                         shape=(len(self.idx["col_indices"]),),
                         dtype = self.A.dtype
@@ -661,6 +662,7 @@ class IndexedMatrix(_Expression):
 
             # extract column
             elif "col_index" in self.idx:
+                function = "extractMatrixCol"
                 C = containers.Vector(
                         shape=(len(self.idx["row_indices"]),),
                         dtype = self.A.dtype
@@ -668,6 +670,7 @@ class IndexedMatrix(_Expression):
 
             # extract submatrix
             else:
+                function = "extractSubMatrix"
                 C = containers.Matrix(
                         shape=(
                             len(self.idx["row_indices"]), 
@@ -677,7 +680,7 @@ class IndexedMatrix(_Expression):
                 )
 
         result = c_func.operator(
-                function        = "extract",
+                function        = function,
                 accum           = accum,
                 replace_flag    = replace_flag,
                 C               = C,
@@ -769,7 +772,7 @@ class IndexedVector(_Expression):
             )
 
         result = c_func.operator(
-                function        = "extract",
+                function        = "extractVector",
                 accum           = accum,
                 replace_flag    = replace_flag,
                 C               = C,

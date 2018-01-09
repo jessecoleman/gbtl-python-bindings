@@ -98,10 +98,16 @@ typedef GraphBLAS::BinaryOp_Bind2nd<A_TYPE, GraphBLAS::UNARY_OP<A_TYPE, C_TYPE>>
 typedef GraphBLAS::UNARY_OP<A_TYPE, C_TYPE> ApplyT;
 #endif
 
+// TODO ensure that correct types compile these operators
 // operations that need monoid
-#if defined(SEMIRING) \
+#if defined(A_BINARY_OP) \
+ || defined(MONOID) \
+ || defined(SEMIRING) \
  || defined(REDUCE)
 typedef GraphBLAS::A_BINARY_OP<A_TYPE> AddBinaryOp;
+#endif
+#if defined(MONOID) \
+ || defined(SEMIRING)
 GEN_GRAPHBLAS_MONOID(Monoid, GraphBLAS::A_BINARY_OP, A_IDENTITY)
 typedef Monoid<C_TYPE> MonoidT;
 #endif
@@ -112,7 +118,6 @@ typedef Semiring<A_TYPE, B_TYPE, C_TYPE> SemiringT;
 #endif
 
 #if defined(MXM)
-// TODO check order of parameters
 void mxm(
         CMatrixT       &C,
         MMatrixT const &M,
@@ -399,24 +404,24 @@ PYBIND11_MODULE(MODULE, m) {
 #elif defined(EWISEMULTVECTOR)
     m.def("eWiseMultVector", &eWiseMultVector, "C"_a, "M"_a, "A"_a, "B"_a, "replace_flag"_a);
 
-#elif defined(APPLY) && defined(C_MATRIX)
-    m.def("apply", &applyMatrix, "C"_a, "M"_a, "A"_a, "replace_flag"_a);
-#elif defined(APPLY) && defined(C_VECTOR)
-    m.def("apply", &applyVector, "C"_a, "M"_a, "A"_a, "replace_flag"_a);
+#elif defined(APPLYMATRIX)
+    m.def("applyMatrix", &applyMatrix, "C"_a, "M"_a, "A"_a, "replace_flag"_a);
+#elif defined(APPLYVECTOR)
+    m.def("applyVector", &applyVector, "C"_a, "M"_a, "A"_a, "replace_flag"_a);
 
-#elif defined(REDUCE) && defined(A_MATRIX) && defined(C_VECTOR)
-    m.def("reduce", &reduceMatrixVector, "C"_a, "M"_a, "A"_a, "replace_flag"_a);
-#elif defined(REDUCE) && defined(A_MATRIX)
-    m.def("reduce", &reduceMatrix, "C"_a, "A"_a);
-#elif defined(REDUCE) && defined(A_VECTOR)
-    m.def("reduce", &reduceVector, "C"_a, "A"_a);
+#elif defined(REDUCEMATRIXVECTOR)
+    m.def("reduceMatrixVector", &reduceMatrixVector, "C"_a, "M"_a, "A"_a, "replace_flag"_a);
+#elif defined(REDUCEMATRIX)
+    m.def("reduceMatrix", &reduceMatrix, "C"_a, "A"_a);
+#elif defined(REDUCEVECTOR)
+    m.def("reduceVector", &reduceVector, "C"_a, "A"_a);
 
-#elif defined(EXTRACT) && defined(C_MATRIX) && defined(ROW_INDICES) && defined(COL_INDICES)
-    m.def("extract", &extractMatrix, "C"_a, "M"_a, "A"_a, "row_indices"_a, "col_indices"_a, "replace_flag"_a);
-#elif defined(EXTRACT) && defined(C_MATRIX) && defined(ROW_INDICES) && defined(COL_INDEX)
-    m.def("extract", &extractMatrixCol, "C"_a, "M"_a, "A"_a, "row_indices"_a, "col_index"_a, "replace_flag"_a);
-#elif defined(EXTRACT) && defined(C_VECTOR) && defined(INDICES)
-    m.def("extract", &extractVector, "C"_a, "M"_a, "A"_a, "indices"_a, "replace_flag"_a);
+#elif defined(EXTRACTSUBMATRIX)
+    m.def("extractSubmatrix", &extractMatrix, "C"_a, "M"_a, "A"_a, "row_indices"_a, "col_indices"_a, "replace_flag"_a);
+#elif defined(EXTRACTMATRIXCOL)
+    m.def("extractMatrixCol", &extractMatrixCol, "C"_a, "M"_a, "A"_a, "row_indices"_a, "col_index"_a, "replace_flag"_a);
+#elif defined(EXTRACTVECTOR)
+    m.def("extractVector", &extractVector, "C"_a, "M"_a, "A"_a, "indices"_a, "replace_flag"_a);
 
 #elif defined(ASSIGN) && defined(C_MATRIX) && defined(A_MATRIX) && defined(ROW_INDICES) && defined(COL_INDICES)
     m.def("assign", &assignMatrix, "C"_a, "M"_a, "A"_a, "row_indices"_a, "col_indices"_a, "replace_flag"_a);
