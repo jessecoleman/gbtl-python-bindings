@@ -699,7 +699,9 @@ class IndexedMatrix(_Expression):
             A = A.eval()
    
         # constant assignment to indices
-        elif isinstance(A, self.A.dtype):
+        if isinstance(A, self.A.dtype):
+
+            function = "assignMatrixConst"
 
             if "row_index" in self.idx:
                 self.idx["row_indices"] = [self.idx["row_index"]]
@@ -710,12 +712,23 @@ class IndexedMatrix(_Expression):
                 del self.idx["col_index"]
 
         # TODO assign from expression behavior not supported
-        elif not isinstance(A, containers.Matrix):
+        elif isinstance(A, containers.Matrix):
+            function = "assignSubmatrix"
+
+        elif isinstance(A, containers.Vector):
+            
+            if "row_index" in self.idx:
+                function = "assignMatrixRow"
+
+            elif "col_index" in self.idx:
+                function = "assignMatrixCol"
+                
+        else:
             raise TypeError("Can't assign from non-matrix type")
 
         # TODO get params from somewhere
         c_func.operator(
-                function        = "assign",
+                function        = function,
                 replace_flag    = False,
                 accum           = None,
                 C               = self.A,
