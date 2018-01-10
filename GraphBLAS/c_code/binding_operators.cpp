@@ -228,11 +228,8 @@ CValueT reduceVector(
     return C;
 }
 
-#elif defined(EXTRACT) \
-   && defined(C_MATRIX) \
-   && defined(ROW_INDICES) \
-   && defined(COL_INDICES)
-void extractMatrix(
+#elif defined(EXTRACTSUBMATRIX)
+void extractSubmatrix(
         CMatrixT         &C,
         MMatrixT   const &M,
         AMatrixT   const &A,
@@ -242,10 +239,7 @@ void extractMatrix(
     )
 { extract(C, M, AccumT(), A, row_indices, col_indices, replace_flag); }
 
-#elif defined(EXTRACT) \
-   && defined(C_MATRIX) \
-   && defined(ROW_INDICES) \
-   && defined(COL_INDEX)
+#elif defined(EXTRACTMATRIXCOL)
 void extractMatrixCol(
         WVectorT         &C,
         MVectorT   const &M,
@@ -256,10 +250,8 @@ void extractMatrixCol(
     )
 { extract(C, M, AccumT(), A, row_indices, col_index, replace_flag); }
 
-#elif defined(EXTRACT) \
-   && defined(C_VECTOR) \
-   && defined(INDICES)
-void extractVector(
+#elif defined(EXTRACTSUBVECTOR)
+void extractSubvector(
         WVectorT        &C,
         MVectorT  const &M,
         UVectorT  const &A,
@@ -387,11 +379,11 @@ PYBIND11_MODULE(MODULE, m) {
     m.def("reduceVector", &reduceVector, "C"_a, "A"_a);
 
 #elif defined(EXTRACTSUBMATRIX)
-    m.def("extractSubmatrix", &extractMatrix, "C"_a, "M"_a, "A"_a, "row_indices"_a, "col_indices"_a, "replace_flag"_a);
+    m.def("extractSubmatrix", &extractSubmatrix, "C"_a, "M"_a, "A"_a, "row_indices"_a, "col_indices"_a, "replace_flag"_a);
 #elif defined(EXTRACTMATRIXCOL)
     m.def("extractMatrixCol", &extractMatrixCol, "C"_a, "M"_a, "A"_a, "row_indices"_a, "col_index"_a, "replace_flag"_a);
-#elif defined(EXTRACTVECTOR)
-    m.def("extractVector", &extractVector, "C"_a, "M"_a, "A"_a, "indices"_a, "replace_flag"_a);
+#elif defined(EXTRACTSUBVECTOR)
+    m.def("extractSubvector", &extractSubvector, "C"_a, "M"_a, "A"_a, "indices"_a, "replace_flag"_a);
 
 #elif defined(ASSIGNSUBMATRIX)
     m.def("assignSubmatrix", &assignSubmatrix, "C"_a, "M"_a, "A"_a, "row_indices"_a, "col_indices"_a, "replace_flag"_a);

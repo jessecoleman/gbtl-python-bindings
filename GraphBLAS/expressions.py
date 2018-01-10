@@ -654,7 +654,6 @@ class IndexedMatrix(_Expression):
 
             # extract row
             if "row_index" in self.idx:
-                function = "extractMatrixRow"
                 C = containers.Vector(
                         shape=(len(self.idx["col_indices"]),),
                         dtype = self.A.dtype
@@ -662,7 +661,6 @@ class IndexedMatrix(_Expression):
 
             # extract column
             elif "col_index" in self.idx:
-                function = "extractMatrixCol"
                 C = containers.Vector(
                         shape=(len(self.idx["row_indices"]),),
                         dtype = self.A.dtype
@@ -670,7 +668,6 @@ class IndexedMatrix(_Expression):
 
             # extract submatrix
             else:
-                function = "extractSubMatrix"
                 C = containers.Matrix(
                         shape=(
                             len(self.idx["row_indices"]), 
@@ -678,6 +675,15 @@ class IndexedMatrix(_Expression):
                         ),
                         dtype=self.A.dtype
                 )
+
+        if "row_index" in self.idx:
+            function = "extractMatrixRow"
+
+        elif "col_index" in self.idx:
+            function = "extractMatrixCol"
+
+        else:
+            function = "extractSubmatrix"
 
         result = c_func.operator(
                 function        = function,
@@ -785,7 +791,7 @@ class IndexedVector(_Expression):
             )
 
         result = c_func.operator(
-                function        = "extractVector",
+                function        = "extractSubvector",
                 accum           = accum,
                 replace_flag    = replace_flag,
                 C               = C,
@@ -803,11 +809,17 @@ class IndexedVector(_Expression):
         if isinstance(A, _Expression):
             A = A.eval()
 
-        elif not isinstance(A, containers.Vector):
+        if isinstance(A, self.A.dtype):
+            function = "assignVectorConst"
+
+        elif isinstance(A, containers.Vector):
+            function = "assignSubvector"
+
+        else:
             raise TypeError("Can't assign from non-matrix type")
 
         c_func.operator(
-                function        = "assign",
+                function        = function,
                 replace_flag    = False,
                 accum           = None,
                 C               = self.A,
