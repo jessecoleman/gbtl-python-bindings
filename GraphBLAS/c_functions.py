@@ -3,7 +3,7 @@ from collections import OrderedDict
 import inspect
 import numpy as np
 from toolz import curry
-from . import c_modules as c_mod
+from . import c_modules
 
 # mapping from python/numpy types to c types
 # ordered by typecasting heirarchy
@@ -150,7 +150,7 @@ def get_function(target, function=None, args=None, kwargs=None, containers=None)
                 kwargs[i + "_type"] = types[get_type(c)]
                 args.append(i)
 
-    module = c_mod.cache[target, args, kwargs]
+    module = c_modules.cache[target, args, kwargs]
 
     # partially apply function with container arguments
     if function is not None:

@@ -327,11 +327,11 @@ void assignVectorConst(
 #elif defined(TRANSPOSE)
 void transpose(
         CMatrixT       &C,
-        MMatrixT const &Mask,
+        MMatrixT const &M,
         AMatrixT const &A,
         bool            replace_flag
     )
-{ transposed(C, M, AccumT(), A, replace_flag); }
+{ transpose(C, M, AccumT(), A, replace_flag); }
 
 #endif
 

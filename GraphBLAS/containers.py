@@ -1,7 +1,6 @@
 from attr import attrs, attrib
 import numpy as np
 from scipy import sparse
-from .boundinnerclass import BoundInnerClass
 from . import c_functions as c
 
 
@@ -125,7 +124,8 @@ class Matrix(object):
 
     @property
     def T(self):
-        return MatrixTranspose(self)
+        from .expressions import Transpose
+        return Transpose(self)
 
     def __invert__(self):
         return MatrixComplement(self)
@@ -158,6 +158,8 @@ class Matrix(object):
 
         elif all(i == slice(None, None, None) for i in item):
             return MaskedMatrix(self, replace_flag=replace_flag)
+
+        # TODO prevent creating indexed expression with boolean flag
 
         # assign/extract expression
         elif all(isinstance(i, (int, slice, list, np.array)) for i in item):
@@ -255,13 +257,16 @@ class Vector(object):
             if shape is not None: self.shape = shape
             else: self.shape = (max(idx) + 1,)
             self.container = module.init_sparse_vector(
-                    self.shape, idx, data
+                    *self.shape, idx, data
             )
 
         else:
-            self.shape = shape
+            if isinstance(shape, int):
+                self.shape = (shape,)
+            else:
+                self.shape = shape
             self.container = module.init_sparse_vector(
-                    self.shape, [], []
+                    *self.shape, [], []
             )
 
     def __repr__(self):

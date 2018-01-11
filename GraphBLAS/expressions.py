@@ -56,7 +56,8 @@ no_mask = _NoMask()
 # indexing into MaskedContainer returns indexed expression
 class MaskedMatrix(object):
 
-    def __init__(self, C, M=no_mask, accum=None, replace_flag=False):
+    @convert_mask
+    def __init__(self, C, M, accum, replace_flag):
 
         self.C = C
         self.M = M
@@ -76,10 +77,20 @@ class MaskedMatrix(object):
         else:
             return NotImplemented
 
+    # TODO support getitem to enable += accum operation
+    #__getitem__ 
+
     # masked can be converted to indexed
-    def __getitem__(self, indices):
-        if indices == slice(None, None, None) or len(indices) == 2:
-            return IndexedMatrix(self, indices)
+    def __setitem__(self, indices, value):
+
+        if indices == slice(None, None, None):
+            return IndexedMatrix(self, (indices,)).assign(value)
+
+        elif len(indices) == 2:
+            return IndexedMatrix(self, indices).assign(value)
+
+        else:
+            raise TypeError("Index must be slice or list")
 
     def assign(self, A):
 
@@ -97,7 +108,7 @@ class MaskedMatrix(object):
 
 class MaskedVector(object):
 
-    def __init__(self, C, M=no_mask, accum=None, replace_flag=False):
+    def __init__(self, C, M, accum, replace_flag):
 
         self.C = C
         self.M = M
@@ -112,10 +123,16 @@ class MaskedVector(object):
         # TODO avoid double execution of assign
         return A.eval(self)
 
-    # TODO masked can be converted to indexed
-    def __getitem__(self, indices):
-        if len(indices) == 1:
-            return IndexedVector(self, indices)
+    def __setitem__(self, indices):
+
+        if indices == slice(None, None, None):
+            return IndexedMatrix(self, (indices,)).assign(value)
+
+        elif len(indices) == 2:
+            return IndexedMatrix(self, indices).assign(value)
+
+        else:
+            raise TypeError("Index must be slice or list")
 
     def assign(self, A):
 
@@ -606,14 +623,29 @@ class IndexedMatrix(_Expression):
 
     def __init__(self, A, indices):
 
-        self.A = A
+        # forces LHS evaluation
+        if isinstance(A, MaskedMatrix):
+            self.LHS = True
+            self.C = A.C
+            self.M = A.M
+            self.accum = A.accum
+            self.replace_flag = A.replace_flag
+
+
+        # can be used as LHS or RHS
+        else:
+            self.C = A
+            self.M = no_mask
+            self.accum = None
+            self.replace_flag = False
+
         self.idx = dict()
 
         # convert 1D index to 2D
         if len(indices) == 1 and indices[0] == slice(None, None, None):
             indices = (*indices, *indices)
 
-        for i, s, dim in zip(indices, A.shape, ("row", "col")):
+        for i, s, dim in zip(indices, self.C.shape, ("row", "col")):
 
             if isinstance(i, slice): 
                 self.idx[dim + "_indices"] = range(*i.indices(s))
@@ -636,18 +668,13 @@ class IndexedMatrix(_Expression):
         # TODO avoid double execution
         return A.eval(self)
 
-    # TODO can be masked if dim(M) == dim(idx)
-    def __getitem__(self, item):
-
-        if item == slice(None, None, None):
-            return self
-
-        else:
-            return NotImplemented
-
+    # extract operation
     @memoize
     @convert_mask
     def eval(self, C, M, accum, replace_flag):
+
+        if self.LHS:
+            raise TypeError("Mask can only be applied to LHS")
 
         # construct container of correct shape and size to extract to
         if C is None:
@@ -676,14 +703,17 @@ class IndexedMatrix(_Expression):
                         dtype=self.A.dtype
                 )
 
-        if "row_index" in self.idx:
+        if "row_index" in self.idx and isinstance(C, containers.Vector):
             function = "extractMatrixRow"
 
-        elif "col_index" in self.idx:
+        elif "col_index" in self.idx and isinstance(C, containers.Vector):
             function = "extractMatrixCol"
 
-        else:
+        elif isinstance(C, containers.Matrix):
             function = "extractSubmatrix"
+
+        else:
+            raise TypeError("Incorrect parameter types")
 
         result = c_func.operator(
                 function        = function,
@@ -691,7 +721,7 @@ class IndexedMatrix(_Expression):
                 replace_flag    = replace_flag,
                 C               = C,
                 M               = M,
-                A               = self.A,
+                A               = self.C,
                 **self.idx
         )
 
@@ -705,7 +735,7 @@ class IndexedMatrix(_Expression):
             A = A.eval()
    
         # constant assignment to indices
-        if isinstance(A, self.A.dtype):
+        if isinstance(A, self.C.dtype):
 
             function = "assignMatrixConst"
 
@@ -735,26 +765,41 @@ class IndexedMatrix(_Expression):
         # TODO get params from somewhere
         c_func.operator(
                 function        = function,
-                replace_flag    = False,
-                accum           = None,
-                C               = self.A,
-                M               = no_mask,
+                replace_flag    = self.replace_flag,
+                accum           = self.accum,
+                C               = self.C,
+                M               = self.M,
                 A               = A,
                 **self.idx
         )
 
-        return self.A
+        return self.C
 
 
 class IndexedVector(_Expression):
 
     def __init__(self, A, index):
 
-        self.A = A
+        # forces LHS evaluation
+        if isinstance(A, MaskedMatrix):
+            self.LHS = True
+            self.C = A.C
+            self.M = A.M
+            self.accum = A.accum
+            self.replace_flag = A.replace_flag
+
+
+        # can be used as LHS or RHS
+        else:
+            self.C = A
+            self.M = no_mask
+            self.accum = None
+            self.replace_flag = False
+
         self.idx = dict()
 
         if isinstance(index, slice): 
-            self.idx["indices"] = range(*index.indices(self.A.shape[0]))
+            self.idx["indices"] = range(*index.indices(self.C.shape[0]))
 
         elif isinstance(index, (list, np.ndarray)):
             self.idx["indices"] = i
@@ -771,32 +816,27 @@ class IndexedVector(_Expression):
         self.accum = get_accum()
         return A.eval(self)
 
-    # TODO decide if self[i, j][M] is desirable interface
-    def __getitem__(self, item):
-
-        if item == slice(None, None, None):
-            return self
-        else:
-            return NotImplemented
-
     @memoize
     @convert_mask
     def eval(self, C, M, accum, replace_flag):
+
+        if self.LHS:
+            raise TypeError("Mask can only be applied to LHS")
 
         if C is None:
 
             C = containers.Vector(
                     shape=(len(self.idx["indices"]),),
-                    dtype=self.A.dtype
+                    dtype=self.C.dtype
             )
 
-        result = c_func.operator(
+        c_func.operator(
                 function        = "extractSubvector",
                 accum           = accum,
                 replace_flag    = replace_flag,
                 C               = C,
                 M               = M,
-                A               = self.A,
+                A               = self.C,
                 **self.idx
         )
 
@@ -805,7 +845,6 @@ class IndexedVector(_Expression):
     @memoize
     def assign(self, A):
 
-        # TODO default replace flag?
         if isinstance(A, _Expression):
             A = A.eval()
 
@@ -820,13 +859,41 @@ class IndexedVector(_Expression):
 
         c_func.operator(
                 function        = function,
-                replace_flag    = False,
-                accum           = None,
-                C               = self.A,
-                M               = no_mask,
+                replace_flag    = self.replace_flag,
+                accum           = self.accum,
+                C               = self.C,
+                M               = self.M,
                 A               = A,
                 **self.idx
         )
 
         return self.A
+
+# TODO don't eval transpose unless necessary. Try to use transpose view where possible
+class Transpose(_Expression):
+
+    def __init__(self, A):
+        self.A = A
+    
+    @memoize
+    @convert_mask
+    def eval(self, C, M, accum, replace_flag):
+
+        if C is None:
+
+            C = containers.Matrix(
+                    shape=self.A.shape,
+                    dtype=self.A.dtype
+            )
+
+        c_func.operator(
+                function        = "transpose",
+                accum           = accum,
+                replace_flag    = replace_flag,
+                C               = C,
+                M               = M,
+                A               = self.A,
+        )
+
+        return C
 
