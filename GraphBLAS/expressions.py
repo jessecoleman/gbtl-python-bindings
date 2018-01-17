@@ -108,6 +108,7 @@ class MaskedMatrix(object):
 
 class MaskedVector(object):
 
+    @convert_mask
     def __init__(self, C, M, accum, replace_flag):
 
         self.C = C
@@ -121,7 +122,9 @@ class MaskedVector(object):
 
         self.accum = get_accum()
         # TODO avoid double execution of assign
-        return A.eval(self)
+        return self.assign(A)
+        # TODO
+        #return A.eval(self)
 
     def __setitem__(self, indices):
 
@@ -221,10 +224,6 @@ class EWiseAddMatrix(_BinaryExpression):
                     dtype=c_type
             )
 
-        # TODO convert indexed to masked
-        elif isinstance(C, IndexedMatrix):
-            pass
-
         elif not isinstance(C, containers.Matrix):
             return NotImplemented
 
@@ -259,10 +258,6 @@ class EWiseAddVector(_BinaryExpression):
                     shape=self.A.shape,
                     dtype=c_type
             )
-
-        # TODO convert indexed to masked
-        elif isinstance(C, IndexedVector):
-            pass
 
         elif not isinstance(C, containers.Vector):
             return NotImplemented
@@ -299,10 +294,6 @@ class EWiseMultMatrix(_BinaryExpression):
                     dtype=c_type
             )
 
-        # TODO convert indexed to masked
-        elif isinstance(C, IndexedMatrix):
-            pass
-
         elif not isinstance(C, containers.Matrix):
             return NotImplemented
 
@@ -338,10 +329,6 @@ class EWiseMultVector(_BinaryExpression):
                     dtype=c_type
             )
 
-        # TODO convert indexed to masked
-        elif isinstance(C, IndexedVector):
-            pass
-
         elif not isinstance(C, containers.Vector):
             return NotImplemented
 
@@ -375,10 +362,6 @@ class MXM(_BinaryExpression):
                     shape=(self.B.shape[0], self.A.shape[1]),
                     dtype=c_type
             )
-
-        # TODO convert indexed to masked
-        elif isinstance(C, IndexedMatrix):
-            pass
 
         elif not isinstance(C, containers.Matrix):
             return NotImplemented
@@ -414,10 +397,6 @@ class MXV(_BinaryExpression):
                     dtype=c_type
             )
 
-        # TODO convert indexed to masked?
-        elif isinstance(C, IndexedVector):
-            pass
-
         elif not isinstance(C, containers.Vector):
             return NotImplemented
 
@@ -451,10 +430,6 @@ class VXM(_BinaryExpression):
                     shape=(self.A.shape[0],),
                     dtype=c_type
             )
-
-        # TODO convert indexed to masked
-        elif isinstance(C, IndexedVector):
-            pass
 
         elif not isinstance(C, containers.Vector):
             return NotImplemented
@@ -553,7 +528,7 @@ class ReduceMatrix(_Expression):
 
     @memoize
     @convert_mask
-    def eval(self, C=None, M=no_mask, accum=None, replace_flag=False):
+    def eval(self, C, M, accum, replace_flag):
 
         function = "reduceMatrix"
         kwargs = {"A": self.A}
@@ -597,7 +572,7 @@ class ReduceVector(_Expression):
             return self.eval(C)
 
     @memoize
-    def eval(self, C=None, M=no_mask, accum=None, replace_flag=False):
+    def eval(self, C, M, accum, replace_flag):
 
         # reduce to a scalar
         if C is None:
@@ -634,6 +609,7 @@ class IndexedMatrix(_Expression):
 
         # can be used as LHS or RHS
         else:
+            self.LHS = False
             self.C = A
             self.M = no_mask
             self.accum = None
@@ -791,6 +767,7 @@ class IndexedVector(_Expression):
 
         # can be used as LHS or RHS
         else:
+            self.LHS = False
             self.C = A
             self.M = no_mask
             self.accum = None
@@ -869,7 +846,8 @@ class IndexedVector(_Expression):
 
         return self.A
 
-# TODO don't eval transpose unless necessary. Try to use transpose view where possible
+# TODO don't eval transpose unless necessary
+# Try to use transpose view where possible
 class Transpose(_Expression):
 
     def __init__(self, A):

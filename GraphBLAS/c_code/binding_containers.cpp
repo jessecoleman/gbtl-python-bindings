@@ -135,7 +135,14 @@ void define_vector(py::module &m)
         .def("hasElement", &VectorT::hasElement)
         .def("setElement", &VectorT::setElement)
         .def("extractElement", &VectorT::extractElement)
-        //.def("extractTuples", &VectorT::extractTuples)
+        .def("extractTuples", [](VectorT const &v) {
+                IndexT nnz = v.nvals();
+                IndexArrayT i(nnz);
+                std::vector<ScalarT> vals(nnz);
+                v.extractTuples(i, vals);
+                return py::make_tuple(i, vals);
+        })
+         //.def("extractTuples", &VectorT::extractTuples)
         .def("__invert__", &vector_complement, py::is_operator())
         .def("__str__", &print<VectorT>, py::is_operator());
         //.def("__eq__", [](const VectorT &a, const VectorT &b) {

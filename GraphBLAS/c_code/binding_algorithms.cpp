@@ -12,7 +12,7 @@ typedef unsigned int IndexT;
 typedef GraphBLAS::IndexArrayType IndexArrayT;
 
 // BFS types
-#if defined(BFS_VARIANTS)
+#if defined(BFS)
 #include <algorithms/bfs.hpp>
 typedef GraphBLAS::Matrix<GRAPH_TYPE> GraphT;
 #endif

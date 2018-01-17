@@ -4,11 +4,13 @@ from GraphBLAS import Matrix, Vector
 @c.type_check
 def bfs(graph: Matrix, wavefront: Vector, parent_list=None):
     if not isinstance(wavefront, Vector):
+        print("creating wavefront")
         w = [0] * graph.shape[1]
         w[wavefront] = 1
         wavefront = Vector(w)
 
     if parent_list is None:
+        print("creating parent_list")
         parent_list = Vector([0] * graph.shape[1])
 
     c.algorithm(
@@ -18,7 +20,7 @@ def bfs(graph: Matrix, wavefront: Vector, parent_list=None):
             parent_list = parent_list
     )
 
-    return parent_list
+    #return parent_list
 
 @c.type_check
 def bfs_batch(graph: Matrix, wavefronts: Matrix, parent_list=None):
