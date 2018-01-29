@@ -18,12 +18,15 @@ __all__ = [
     "reduce",
     "extract",
     "assign",
+    "Replace",
+    "NoReplace",
     # operator instances
     "BooleanAccumulate",
     "ArithmeticAccumulate",
     "Identity",
     "AdditiveInverse",
     "MultiplicativeInverse",
+    "PlusMonoid",
     "ArithmeticSemiring",
     "MinPlusSemiring",
     "MaxTimesSemiring",
@@ -141,7 +144,7 @@ class ReplaceFlag(ContextDecorator):
         _replace.append(self)
         return self
 
-    def __exit__(self):
+    def __exit__(self, *args):
         
         global _replace
         _replace.pop()
@@ -160,6 +163,9 @@ NoReplace = ReplaceFlag(False)
 Identity = UnaryOp(UnaryOp.identity)
 AdditiveInverse = UnaryOp(UnaryOp.additive_inverse)
 MultiplicativeInverse = UnaryOp(UnaryOp.multiplicative_inverse)
+
+# default monoids
+PlusMonoid = Monoid(BinaryOp.plus, Monoid.additive)
 
 # default semirings
 ArithmeticSemiring = Semiring(BinaryOp.plus, Monoid.additive, BinaryOp.times)
@@ -184,7 +190,7 @@ def get_accum():
     return _accum[-1]
 
 def get_replace():
-    return _replace[-1]
+    return _replace[-1].flag
 
 # function decorator to fill in operator from context if not provided
 def operator_type(op_type):
@@ -211,6 +217,7 @@ def operator_type(op_type):
 
     return wrapper
             
+# TODO consider lazy evaluation here
 def eval_expressions(function):
 
     @wraps(function)
@@ -234,7 +241,7 @@ def mxm(semiring, A, B, C=None):
         return expr.MXM(semiring, A, B, C)
 
     else:
-        raise Error("rows of A and columns of B must be equal")
+        raise Exception("rows of A and columns of B must be equal")
 
 @eval_expressions
 @operator_type(Semiring)
@@ -245,7 +252,7 @@ def vxm(semiring, A, B, C=None):
         return expr.VXM(semiring, A, B, C)
 
     else:
-        raise Error("length of A and columns of B must be equal")
+        raise Exception("length of A and columns of B must be equal")
 
 @eval_expressions
 @operator_type(Semiring)
@@ -255,7 +262,7 @@ def mxv(semiring, A, B, C=None):
         return expr.MXV(semiring, A, B, C)
 
     else:
-        raise Error("rows of A and length of B must be equal")
+        raise Exception("rows of A and length of B must be equal")
 
 
 @eval_expressions
@@ -269,7 +276,7 @@ def eWiseMult(binary_op, A, B, C=None):
         return expr.EWiseMultMatrix(binary_op, A, B, C)
 
     else:
-        raise Error("A and B must have the same dimension")
+        raise Exception("A and B must have the same dimension")
 
 
 @eval_expressions
@@ -283,10 +290,10 @@ def eWiseAdd(binary_op, A, B, C=None):
         return expr.EWiseAddMatrix(binary_op, A, B, C)
 
     else:
-        raise Error("A and B must have the same dimension")
+        raise Exception("A and B must have the same dimension")
 
 @eval_expressions
-@operator_type(UnaryOp)
+#@operator_type(UnaryOp)
 def apply(unary_op, A, C=None):
 
     if 2 == len(A.shape):

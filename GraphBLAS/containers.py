@@ -1,4 +1,3 @@
-from attr import attrs, attrib
 import numpy as np
 from scipy import sparse
 from . import c_functions as c
@@ -135,52 +134,38 @@ class Matrix(object):
         return apply(AdditiveInverse, self)
 
     def __getitem__(self, item):
-        from .expressions import IndexedMatrix, MaskedMatrix
+        from .expressions import IndexedMatrix, MaskedMatrix, AllIndices, NoMask
 
-        if type(item) != tuple:
-            item = (item,)
+        if item is None:
+            return MaskedMatrix(self, NoMask())
 
-        if len(item) == 2 and all(isinstance(i, int) for i in item):
-            return self.container.extractElement(*item)
+        elif isinstance(item, (Matrix, NoMask)):
+            return MaskedMatrix(self, item)
 
-        # LHS expression
-        replace_flag = False
+        elif item == slice(None):
+            return IndexedMatrix(self, (item,) * 2)
 
-        if type(item[-1]) is bool:
-            *item, replace_flag = item
+        elif type(item) == tuple and len(item) == 2:
 
-        if len(item) == 1 and isinstance(item[0], Matrix):
-            return MaskedMatrix(
-                    self, 
-                    M = item[0], 
-                    replace_flag = replace_flag
-            )
+            # assign/extract expression
+            if all(isinstance(i, (int, slice, list, np.ndarray)) for i in item):
+                return IndexedMatrix(self, item)
 
-        elif all(i == slice(None, None, None) for i in item):
-            return MaskedMatrix(self, replace_flag=replace_flag)
-
-        # TODO prevent creating indexed expression with boolean flag
-
-        # assign/extract expression
-        elif all(isinstance(i, (int, slice, list, np.array)) for i in item):
-            return IndexedMatrix(self, item)
-
-        else:
-            raise TypeError("Mask must be a boolean matrix or [:] slice")
+            elif all(isinstance(i, int) for i in item):
+                return self.container.extractElement(*item)
+    
+            else:
+                raise TypeError("Mask must be a boolean matrix or [:] slice")
 
     def __setitem__(self, item, value):
 
-        if type(item) != tuple:
-            item = (item,)
-
-        if len(item) == 2 and all(isinstance(i, int) for i in item):
+        if type(item) == tuple and len(item) == 2 and all(isinstance(i, int) for i in item):
             self.container.setElement(*item, value)
-            return
 
         # TODO handle other improper input
-        self[item].assign(value)
-
-        return self
+        else:
+            self[item].assign(value)
+            return self
 
     def __iter__(self):
         i, j, v = self.container.extractTuples()
@@ -333,40 +318,19 @@ class Vector(object):
         return apply(AdditiveInverse, self)
 
     def __getitem__(self, item):
-        from .expressions import IndexedVector, MaskedVector
+        from .expressions import MaskedVector, IndexedVector, NoMask, AllIndices
 
         if isinstance(item, int):
             return self.container.extractElement(item)
 
-        if type(item) != tuple:
-            item = (item,)
+        if item is None:
+            return MaskedVector(self, NoMask())
 
-        # LHS expression
-        replace_flag = False
+        if isinstance(item, (Vector, NoMask)):
+            return MaskedVector(self, item)
 
-        if type(item[-1]) is bool:
-            *item, replace_flag = item
-
-        if len(item) == 1:
-
-            item = item[0]
-
-            if isinstance(item, Vector):
-                return MaskedVector(
-                        self, 
-                        M = item, 
-                        replace_flag = replace_flag
-                )
-
-            elif item == slice(None, None, None):
-                return MaskedVector(self, replace_flag = replace_flag)
-
-            # assign/extract expression
-            elif len(item) == 1 and isinstance(item[0], (int, slice, list, np.array)):
-                return IndexedVector(self, item)
-
-            else:
-                raise TypeError("Mask must be a boolean vector or [:] slice")
+        elif item == slice(None) or isinstance(item, (slice, list, np.ndarray, AllIndices)):
+            return IndexedVector(self, item)
 
         else:
             raise TypeError("Mask must be a boolean vector or [:] slice")
@@ -375,14 +339,11 @@ class Vector(object):
 
         if isinstance(item, int):
             self.container.setElement(item, value)
-            return
 
-        if type(item) != tuple:
-            item = (item,)
-
-        self[item].assign(value)
-        
-        return self
+        # TODO check for invalid input
+        else:
+            self[item].assign(value)
+            return self
 
     def __iter__(self):
 

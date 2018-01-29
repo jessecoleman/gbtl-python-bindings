@@ -6,4 +6,4 @@ from .operators import ArithmeticSemiring, ArithmeticAccumulate
 ArithmeticSemiring.__enter__()
 ArithmeticAccumulate.__enter__()
 
-__all__ = ['Matrix', 'Vector', 'algorithms', 'operators']
+__all__ = ['Matrix', 'Vector', 'algorithms', 'operators', 'utilities']

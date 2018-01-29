@@ -29,6 +29,9 @@ types = OrderedDict([
 def no_mask():
     return get_function(target = "nomask").NoMask()
 
+def all_indices():
+    return get_function(target = "nomask").AllIndices()
+
 def container(dtype):
 
     return get_function(
@@ -36,7 +39,7 @@ def container(dtype):
             kwargs = {"dtype": types[dtype]}
     )
 
-def operator(function, accum=None, operation=None, replace_flag=None, **containers):
+def operator(function, operation=None, accum=None, replace_flag=None, **containers):
 
     args = [function]
     kwargs = {}
@@ -55,6 +58,7 @@ def operator(function, accum=None, operation=None, replace_flag=None, **containe
     # set default accumulate operator
     if accum is None:
         args.append("no_accum")
+
     else:
         kwargs["accum_binaryop"] = accum.binary_op
 
@@ -146,6 +150,8 @@ def get_function(target, function=None, args=None, kwargs=None, containers=None)
                 kwargs[i + "_type"] = types[type(c)]
                 args.append(i + "_value")
             # if c is index list
+            elif hasattr(c, "all_indices"):
+                args.append("all_" + i)
             else:
                 kwargs[i + "_type"] = types[get_type(c)]
                 args.append(i)

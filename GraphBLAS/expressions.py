@@ -32,7 +32,10 @@ def memoize(func):
 def convert_mask(func):
 
     @wraps(func)
-    def new_func(self, C=None, M=no_mask, accum=None, replace_flag=False):
+    def new_func(self, C=None, M=None, accum=None, replace_flag=None):
+
+        if M is None:
+            M = no_mask
 
         if type(C) == MaskedMatrix or type(C) == MaskedVector:
             return func(self, C.C, C.M, C.accum, C.replace_flag)
@@ -42,27 +45,31 @@ def convert_mask(func):
 
     return new_func
 
-class _NoMask(object):
+class NoMask(object):
 
     def __init__(self):
         self.container = c_func.no_mask()
         self.dtype = None
 
+class AllIndices(object):
 
-no_mask = _NoMask()
+    def __init__(self):
+        self.all_indices = c_func.all_indices()
 
+no_mask = NoMask()
+all_indices = AllIndices()
 
 # TODO
 # indexing into MaskedContainer returns indexed expression
 class MaskedMatrix(object):
 
-    @convert_mask
-    def __init__(self, C, M, accum, replace_flag):
+    def __init__(self, C, M):
+        from .operators import get_replace
 
         self.C = C
         self.M = M
-        self.accum = accum
-        self.replace_flag = replace_flag
+        self.accum = None
+        self.replace_flag = get_replace()
 
     # self.__setitem__(item, self.__getitem(item).__iadd__(value))
     def __iadd__(self, A):
@@ -77,20 +84,22 @@ class MaskedMatrix(object):
         else:
             return NotImplemented
 
-    # TODO support getitem to enable += accum operation
-    #__getitem__ 
+    # TODO debug
+    def __getitem__(self, indices):
+
+        if indices == slice(None):
+            return IndexedMatrix(self, (indices,) * 2)
+
+        elif len(indices) == 2:
+            return IndexedMatrix(self, indices)
+
+        else:
+            raise TypeError("Index must be length 2")
 
     # masked can be converted to indexed
     def __setitem__(self, indices, value):
 
-        if indices == slice(None, None, None):
-            return IndexedMatrix(self, (indices,)).assign(value)
-
-        elif len(indices) == 2:
-            return IndexedMatrix(self, indices).assign(value)
-
-        else:
-            raise TypeError("Index must be slice or list")
+        return self[indices].assign(value)
 
     def assign(self, A):
 
@@ -100,7 +109,8 @@ class MaskedMatrix(object):
 
         # copy constructor
         elif isinstance(A, containers.Vector):
-            return IndexedVector(A, slice(None, None, None)).eval(self) 
+            from operators import Identity
+            return apply(Identity, A).eval(self) 
 
         else:
             return NotImplemented
@@ -108,13 +118,13 @@ class MaskedMatrix(object):
 
 class MaskedVector(object):
 
-    @convert_mask
-    def __init__(self, C, M, accum, replace_flag):
+    def __init__(self, C, M):
+        from .operators import get_replace
 
         self.C = C
         self.M = M
-        self.accum = accum
-        self.replace_flag = replace_flag
+        self.accum = None
+        self.replace_flag = get_replace()
 
     # self.__setitem__(item, self.__getitem(item).__iadd__(value))
     def __iadd__(self, A):
@@ -123,30 +133,24 @@ class MaskedVector(object):
         self.accum = get_accum()
         # TODO avoid double execution of assign
         return self.assign(A)
-        # TODO
-        #return A.eval(self)
 
-    def __setitem__(self, indices):
+    def __getitem__(self, indices):
+        return IndexedVector(self, indices)
 
-        if indices == slice(None, None, None):
-            return IndexedMatrix(self, (indices,)).assign(value)
-
-        elif len(indices) == 2:
-            return IndexedMatrix(self, indices).assign(value)
-
-        else:
-            raise TypeError("Index must be slice or list")
+    def __setitem__(self, indices, value):
+        return self[indices].assign(value)
 
     def assign(self, A):
+        from .operators import apply, Identity
 
         # evaluate expression into self
         if isinstance(A, _Expression):
             return A.eval(self)
 
-        # copy constructor
         elif isinstance(A, containers.Vector):
-            return IndexedVector(A, slice(None, None, None)).eval(self) 
+            return apply(Identity, A).eval(self) 
 
+        # TODO ???
         else:
             return NotImplemented
 
@@ -332,7 +336,7 @@ class EWiseMultVector(_BinaryExpression):
         elif not isinstance(C, containers.Vector):
             return NotImplemented
 
-        c_func.operator(
+        result = c_func.operator(
             function        = "eWiseMultVector",
             operation       = self.op,
             accum           = accum,
@@ -572,6 +576,7 @@ class ReduceVector(_Expression):
             return self.eval(C)
 
     @memoize
+    @convert_mask
     def eval(self, C, M, accum, replace_flag):
 
         # reduce to a scalar
@@ -591,6 +596,9 @@ class ReduceVector(_Expression):
         )
 
         return result
+
+    def __div__(self, other):
+        return self.evaluated / other
 
 
 # acts as LHS if performing assign, RHS if performing extract
@@ -613,17 +621,17 @@ class IndexedMatrix(_Expression):
             self.C = A
             self.M = no_mask
             self.accum = None
+            # TODO figure out this bs
             self.replace_flag = False
 
         self.idx = dict()
 
-        # convert 1D index to 2D
-        if len(indices) == 1 and indices[0] == slice(None, None, None):
-            indices = (*indices, *indices)
-
         for i, s, dim in zip(indices, self.C.shape, ("row", "col")):
 
-            if isinstance(i, slice): 
+            if i == slice(None):
+                self.idx[dim + "_indices"] = all_indices
+
+            elif isinstance(i, slice): 
                 self.idx[dim + "_indices"] = range(*i.indices(s))
 
             elif isinstance(i, (list, np.ndarray)):
@@ -771,11 +779,15 @@ class IndexedVector(_Expression):
             self.C = A
             self.M = no_mask
             self.accum = None
+            # TODO broken
             self.replace_flag = False
 
         self.idx = dict()
 
-        if isinstance(index, slice): 
+        if index == slice(None):
+            self.idx["indices"] = all_indices
+
+        elif isinstance(index, slice): 
             self.idx["indices"] = range(*index.indices(self.C.shape[0]))
 
         elif isinstance(index, (list, np.ndarray)):
@@ -784,7 +796,7 @@ class IndexedVector(_Expression):
         else:
             raise TypeError("Mask must be boolean Matrix or 2D slice with optional replace flag")
 
-    # TODO fix broken shit
+    # TODO fix broken stuff
     # accum expression will be evaluated by __setitem__ of underlying container
     # self.__setitem__(item, self.__getitem__(item).__iadd__(value))
     def __iadd__(self, A):
@@ -825,7 +837,7 @@ class IndexedVector(_Expression):
         if isinstance(A, _Expression):
             A = A.eval()
 
-        if isinstance(A, self.A.dtype):
+        if isinstance(A, self.C.dtype):
             function = "assignVectorConst"
 
         elif isinstance(A, containers.Vector):
@@ -844,7 +856,7 @@ class IndexedVector(_Expression):
                 **self.idx
         )
 
-        return self.A
+        return self.C
 
 # TODO don't eval transpose unless necessary
 # Try to use transpose view where possible

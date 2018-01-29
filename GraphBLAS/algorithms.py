@@ -1,3 +1,4 @@
+import sys
 from GraphBLAS import c_functions as c
 from GraphBLAS import Matrix, Vector
 
@@ -41,6 +42,9 @@ def bfs_batch(graph: Matrix, wavefronts: Matrix, parent_list=None):
     )
 
     return parent_list
+
+def bfs_level_masked_v2(graph, wavefront, levels):
+
 
 @c.type_check
 def maxflow(capacity: Matrix, source: int, sink: int):
@@ -171,6 +175,40 @@ def mst(graph: Matrix, parents: Vector):
             graph       = graph,
             parents     = parents
     )
+
+@c.type_check
+def page_rank(
+        graph: Matrix, 
+        page_rank: Vector,
+        damping_factor=0.85,
+        threshold=1.e-5,
+        max_iters=None):
+
+    if max_iters is None:
+
+        c.algorithm(
+                algorithm       = "page_rank",
+                graph           = graph,
+                page_rank       = page_rank,
+                damping_factor  = damping_factor,
+                threshold       = threshold,
+        )
+
+    else:
+
+        c.algorithm(
+                algorithm       = "page_rank",
+                graph           = graph,
+                page_rank       = page_rank,
+                damping_factor  = damping_factor,
+                threshold       = threshold,
+                max_iters       = max_iters
+        )
+
+    print("page_rank:", page_rank)
+
+    return page_rank
+ 
 
 @c.type_check
 def sssp(matrix: Matrix, paths: Vector):

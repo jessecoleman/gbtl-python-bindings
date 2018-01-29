@@ -48,8 +48,10 @@ typedef GraphBLAS::Vector<GRAPH_TYPE> VectorT;
 #include <algorithms/mis.hpp>
 #elif defined(MST)
 #include <algorithms/mst.hpp>
-#elif defined(PAGERANK)
+#elif defined(PAGE_RANK)
 #include <algorithms/page_rank.hpp>
+typedef GraphBLAS::Matrix<GRAPH_TYPE> MatrixT;
+typedef PAGE_RANK_TYPE RealT;
 #elif defined(SSSP)
 #include <algorithms/sssp.hpp>
 
@@ -87,8 +89,8 @@ PYBIND11_MODULE(MODULE, m) {
     m.def("mis", &algorithms::mis<MatrixT>, "graph"_a, "independent_set"_a, "seed"_a);
 #elif defined(MST)
     m.def("mst", &algorithms::mst<MatrixT>, "graph"_a, "mst_parents"_a);
-#elif defined(PAGERANK)
-    m.def("page_rank", &page_rank<MatrixT, double>, 
+#elif defined(PAGE_RANK)
+    m.def("page_rank", &algorithms::page_rank<MatrixT, RealT>, 
             "graph"_a, 
             "page_rank"_a, 
             "damping_factor"_a = 0.85, 
