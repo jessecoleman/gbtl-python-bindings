@@ -3,6 +3,8 @@
 #include <pybind11/operators.h>
 
 #include <graphblas/graphblas.hpp>
+//#include <graphblas.hpp>
+
 
 namespace py = pybind11;
 using namespace pybind11::literals;
@@ -25,6 +27,9 @@ typedef GraphBLAS::Matrix<PARENT_LIST_TYPE> ParentListMatrixT;
 #elif defined(WAVEFRONT_TYPE) && defined(LEVEL_LIST_TYPE)
 typedef GraphBLAS::Matrix<WAVEFRONT_TYPE> WavefrontMatrixT;
 typedef GraphBLAS::Matrix<LEVEL_LIST_TYPE> LevelListMatrixT;
+#elif defined(WAVEFRONT_TYPE) && defined(LEVELS_TYPE)
+typedef GraphBLAS::Vector<WAVEFRONT_TYPE> WavefrontMatrixT;
+typedef GraphBLAS::Vector<LEVELS_TYPE> LevelsMatrixT;
 
 #elif defined(MAXFLOW)
 #include <algorithms/maxflow.hpp>
@@ -54,6 +59,8 @@ typedef GraphBLAS::Matrix<GRAPH_TYPE> MatrixT;
 typedef PAGE_RANK_TYPE RealT;
 #elif defined(SSSP)
 #include <algorithms/sssp.hpp>
+typedef GraphBLAS::Matrix<GRAPH_TYPE> MatrixT;
+typedef GraphBLAS::Vector<PATH_TYPE> PathT;
 
 #elif defined(TRIANGLE_COUNT)
 #include <algorithms/triangle_count.hpp>
@@ -72,6 +79,8 @@ PYBIND11_MODULE(MODULE, m) {
     m.def("bfs_batch", &algorithms::bfs_batch<GraphT, WavefrontMatrixT, ParentListMatrixT>, "graph"_a, "wavefronts"_a, "parent_list"_a);
 #elif defined(WAVEFRONT_TYPE) && defined(LEVEL_LIST_TYPE)
     m.def("bfs_level", &algorithms::bfs_level<GraphT, WavefrontMatrixT, LevelListMatrixT>, "graph"_a, "wavefront"_a, "level_list"_a);
+#elif defined(WAVEFRONT_TYPE) && defined(LEVELS_TYPE)
+    m.def("bfs_level_masked_v2", &algorithms::bfs_level_masked_v2<GraphT, WavefrontMatrixT, LevelsMatrixT>, "graph"_a, "wavefront"_a, "levels"_a);
 #elif defined(MAXFLOW)
     m.def("maxflow",    &algorithms::maxflow<MatrixT>, "capacity"_a, "source"_a, "sink"_a);
 #elif defined(METRICS)
@@ -98,14 +107,14 @@ PYBIND11_MODULE(MODULE, m) {
             "max_iters"_a = std::numeric_limits<unsigned int>::max()
     );
 #elif defined(SSSP)
-    m.def("sssp", &algorithms::sssp<MatrixT, PathVectorT>, "graph"_a, "path"_a);
-    m.def("batch_sssp", &algorithms::sssp<MatrixT, PathMatrixT>, "graph"_a, "paths"_a);
+    m.def("sssp", &algorithms::sssp<MatrixT, PathT>, "graph"_a, "path"_a);
+//    m.def("batch_sssp", &algorithms::sssp<MatrixT, PathMatrixT>, "graph"_a, "paths"_a);
 #elif defined(TRIANGLE_COUNT)
     m.def("triangle_count", &algorithms::triangle_count<MatrixT>, "graph"_a);
-    m.def("triangle_count_masked", &algorithms::triangle_count<MatrixT>, "L"_a);
-    m.def("triangle_count_flame1", &algorithms::triangle_count<MatrixT>, "graph"_a);
-    m.def("triangle_count_flame1a", &algorithms::triangle_count<MatrixT>, "graph"_a);
-    m.def("triangle_count_flame2", &algorithms::triangle_count<MatrixT>, "graph"_a);
+    //m.def("triangle_count_masked", &algorithms::triangle_count<MatrixT>, "L"_a);
+    //m.def("triangle_count_flame1", &algorithms::triangle_count<MatrixT>, "graph"_a);
+    //m.def("triangle_count_flame1a", &algorithms::triangle_count<MatrixT>, "graph"_a);
+    //m.def("triangle_count_flame2", &algorithms::triangle_count<MatrixT>, "graph"_a);
     //m.def("triangle_count_newGBTL", &algorithms::triangle_count_newGBTL<LMatrixT, MatrixT>, "L"_a, "U"_a);
 #endif
 }

@@ -1,9 +1,9 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/operators.h>
-#include <pybind11/numpy.h>
 
 #include "graphblas/graphblas.hpp"
+//#include "graphblas.hpp"
 
 namespace py = pybind11;
 using namespace pybind11::literals;
@@ -98,7 +98,7 @@ typedef GraphBLAS::ACCUM_BINARYOP<C_TYPE> AccumT;
 #if defined(MIN_IDENTITY)
 #define A_IDENTITY std::numeric_limits<C_TYPE>::max()
 #elif defined(MONOID) || defined(SEMIRING)
-#define A_IDENTITY IDENTITY
+#define A_IDENTITY ADD_IDENTITY
 #endif
 
 #if (defined(APPLYMATRIX) || defined(APPLYVECTOR)) && defined(BOUND_CONST)
@@ -110,16 +110,15 @@ typedef GraphBLAS::UNARY_OP<A_TYPE, C_TYPE> ApplyT;
 
 // TODO ensure that correct types compile these operators
 // operations that need monoid
-#if defined(A_BINARY_OP) || defined(MONOID) || defined(SEMIRING)
-typedef GraphBLAS::A_BINARY_OP<A_TYPE> AssociativeBinaryOp;
-#endif
-#if defined(MONOID) || defined(SEMIRING)
-GEN_GRAPHBLAS_MONOID(Monoid, GraphBLAS::A_BINARY_OP, A_IDENTITY)
+#if defined(BINARY_OP) 
+typedef GraphBLAS::BINARY_OP<A_TYPE> BinaryOp;
+#elif defined(MONOID) || defined(SEMIRING)
+typedef GraphBLAS::ADD_BINARY_OP<A_TYPE> BinaryOp;
+GEN_GRAPHBLAS_MONOID(Monoid, GraphBLAS::ADD_BINARY_OP, A_IDENTITY)
 typedef Monoid<C_TYPE> MonoidT;
 #endif
 #if defined(SEMIRING)
-typedef GraphBLAS::M_BINARY_OP<A_TYPE, B_TYPE, C_TYPE> MultBinaryOp;
-GEN_GRAPHBLAS_SEMIRING(Semiring, Monoid, GraphBLAS::M_BINARY_OP)
+GEN_GRAPHBLAS_SEMIRING(Semiring, Monoid, GraphBLAS::MULT_BINARY_OP)
 typedef Semiring<A_TYPE, B_TYPE, C_TYPE> SemiringT;
 #endif
 
@@ -161,7 +160,7 @@ void eWiseAddMatrix(
         BMatrixT const &B,
         bool            replace_flag
     )
-{ GraphBLAS::eWiseAdd(C, M, AccumT(), AssociativeBinaryOp(), A, B, replace_flag); }
+{ GraphBLAS::eWiseAdd(C, M, AccumT(), BinaryOp(), A, B, replace_flag); }
 
 #elif defined(EWISEADDVECTOR)
 void eWiseAddVector(
@@ -171,7 +170,7 @@ void eWiseAddVector(
         VVectorT const &B,
         bool            replace_flag
     )
-{ GraphBLAS::eWiseAdd(C, M, AccumT(), AssociativeBinaryOp(), A, B, replace_flag); }
+{ GraphBLAS::eWiseAdd(C, M, AccumT(), BinaryOp(), A, B, replace_flag); }
 
 #elif defined(EWISEMULTMATRIX)
 void eWiseMultMatrix(
@@ -181,7 +180,7 @@ void eWiseMultMatrix(
         BMatrixT const &B,
         bool            replace_flag
     )
-{ GraphBLAS::eWiseMult(C, M, AccumT(), AssociativeBinaryOp(), A, B, replace_flag); }
+{ GraphBLAS::eWiseMult(C, M, AccumT(), BinaryOp(), A, B, replace_flag); }
 
 #elif defined(EWISEMULTVECTOR)
 void eWiseMultVector(
@@ -191,7 +190,7 @@ void eWiseMultVector(
         VVectorT const &B,
         bool            replace_flag
     )
-{ GraphBLAS::eWiseMult(C, M, AccumT(), AssociativeBinaryOp(), A, B, replace_flag); }
+{ GraphBLAS::eWiseMult(C, M, AccumT(), BinaryOp(), A, B, replace_flag); }
 
 #elif defined(APPLYMATRIX)
 void applyMatrix(

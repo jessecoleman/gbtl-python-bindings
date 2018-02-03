@@ -88,8 +88,8 @@ class BinaryOp(_Op, ContextDecorator):
     first       = "First"
     second      = "Second"
 
-    def __init__(self, a_binary_op):
-        self.a_binary_op = a_binary_op
+    def __init__(self, binary_op):
+        self.binary_op = binary_op
 
 
 class Monoid(BinaryOp, ContextDecorator):
@@ -98,19 +98,19 @@ class Monoid(BinaryOp, ContextDecorator):
     boolean     = "false"
     minimum     = "MinIdentity"
 
-    def __init__(self, a_binary_op, identity):
+    def __init__(self, binary_op, identity):
 
-        self.a_binary_op = a_binary_op
-        self.identity = identity
+        self.add_binary_op = binary_op
+        self.add_identity = identity
 
 
 class Semiring(Monoid, ContextDecorator):
 
-    def __init__(self, a_binary_op, identity, m_binary_op):
+    def __init__(self, monoid, binary_op):
         
-        self.a_binary_op = a_binary_op
-        self.identity = identity
-        self.m_binary_op = m_binary_op
+        self.add_binary_op = monoid.add_binary_op
+        self.add_identity = monoid.add_identity
+        self.mult_binary_op = binary_op
 
 
 class Accumulator(BinaryOp, ContextDecorator):
@@ -166,16 +166,19 @@ MultiplicativeInverse = UnaryOp(UnaryOp.multiplicative_inverse)
 
 # default monoids
 PlusMonoid = Monoid(BinaryOp.plus, Monoid.additive)
+LogicalMonoid = Monoid(BinaryOp.logical_or, Monoid.boolean)
+MinMonoid = Monoid(BinaryOp.minimum, Monoid.minimum)
+MaxMonoid = Monoid(BinaryOp.maximum, Monoid.additive)
 
 # default semirings
-ArithmeticSemiring = Semiring(BinaryOp.plus, Monoid.additive, BinaryOp.times)
-LogicalSemiring = Semiring(BinaryOp.logical_or, Monoid.boolean, BinaryOp.logical_and)
-MinPlusSemiring = Semiring(BinaryOp.minimum, Monoid.minimum, BinaryOp.plus)
-MaxTimesSemiring = Semiring(BinaryOp.maximum, Monoid.additive, BinaryOp.times)
-MinSelect2ndSemiring = Semiring(BinaryOp.minimum, Monoid.minimum, BinaryOp.second)
-MaxSelect2ndSemiring = Semiring(BinaryOp.maximum, Monoid.additive, BinaryOp.second)
-MinSelect1stSemiring = Semiring(BinaryOp.minimum, Monoid.minimum, BinaryOp.first)
-MaxSelect1stSemiring = Semiring(BinaryOp.maximum, Monoid.additive, BinaryOp.first)
+ArithmeticSemiring = Semiring(PlusMonoid, BinaryOp.times)
+LogicalSemiring = Semiring(LogicalMonoid, BinaryOp.logical_and)
+MinPlusSemiring = Semiring(MinMonoid, BinaryOp.plus)
+MaxTimesSemiring = Semiring(MaxMonoid, BinaryOp.times)
+MinSelect2ndSemiring = Semiring(MinMonoid, BinaryOp.second)
+MaxSelect2ndSemiring = Semiring(MaxMonoid, BinaryOp.second)
+MinSelect1stSemiring = Semiring(MinMonoid, BinaryOp.first)
+MaxSelect1stSemiring = Semiring(MaxMonoid, BinaryOp.first)
 
 
 ###############################################################################

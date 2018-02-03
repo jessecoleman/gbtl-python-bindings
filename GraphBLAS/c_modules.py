@@ -22,6 +22,7 @@ GB_SOURCE   = "/home/jessecoleman/graphpack/gbtl/src"
 MODULES     = os.path.abspath("{cwd}/modules".format(cwd=CWD))
 C_CODE      = os.path.abspath("{cwd}/c_code".format(cwd=CWD))
 #TODO dynamically configure this with cmake
+#PROJECT     = "-I{c_code}".format(c_code=C_CODE)
 PROJECT     = "-I{gb_source} -I{c_code}".format(gb_source=GB_SOURCE, c_code=C_CODE)
 
 # get environment variables
@@ -84,6 +85,7 @@ def get_module(target, args, kwargs):
             )
     ]
     print(" ".join(cmd[:2] + cmd[24:]))
+    #print(" ".join(cmd))
     subprocess.call(cmd, cwd=C_CODE)
 
     return importlib.import_module(

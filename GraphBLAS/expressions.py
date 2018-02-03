@@ -54,7 +54,7 @@ class NoMask(object):
 class AllIndices(object):
 
     def __init__(self):
-        self.all_indices = c_func.all_indices()
+        self.container = c_func.all_indices()
 
 no_mask = NoMask()
 all_indices = AllIndices()
@@ -66,6 +66,7 @@ class MaskedMatrix(object):
     def __init__(self, C, M):
         from .operators import get_replace
 
+        self.dtype = C.dtype
         self.C = C
         self.M = M
         self.accum = None
@@ -121,6 +122,7 @@ class MaskedVector(object):
     def __init__(self, C, M):
         from .operators import get_replace
 
+        self.dtype = C.dtype
         self.C = C
         self.M = M
         self.accum = None
@@ -765,7 +767,7 @@ class IndexedVector(_Expression):
     def __init__(self, A, index):
 
         # forces LHS evaluation
-        if isinstance(A, MaskedMatrix):
+        if isinstance(A, MaskedVector):
             self.LHS = True
             self.C = A.C
             self.M = A.M

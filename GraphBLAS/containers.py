@@ -123,6 +123,8 @@ class Matrix(object):
 
     @property
     def T(self):
+        # TODO
+        return MatrixTranspose(self)
         from .expressions import Transpose
         return Transpose(self)
 

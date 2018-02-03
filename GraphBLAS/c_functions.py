@@ -77,6 +77,7 @@ algorithm_dict = {
         "bfs": "bfs",
         "bfs_batch": "bfs",
         "bfs_level": "bfs",
+        "bfs_level_masked_v2": "bfs",
         "vertex_in_degree": "metrics",
         "vertex_out_degree": "metrics",
         "vertex_degree": "metrics",
@@ -150,7 +151,7 @@ def get_function(target, function=None, args=None, kwargs=None, containers=None)
                 kwargs[i + "_type"] = types[type(c)]
                 args.append(i + "_value")
             # if c is index list
-            elif hasattr(c, "all_indices"):
+            elif type(c).__name__ == "AllIndices":
                 args.append("all_" + i)
             else:
                 kwargs[i + "_type"] = types[get_type(c)]

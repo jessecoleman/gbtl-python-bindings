@@ -43,8 +43,16 @@ def bfs_batch(graph: Matrix, wavefronts: Matrix, parent_list=None):
 
     return parent_list
 
+# TODO
 def bfs_level_masked_v2(graph, wavefront, levels):
+    c.algorithm(
+            algorithm   = "bfs_level_masked_v2",
+            graph       = graph,
+            wavefront   = wavefront,
+            levels      = levels
+    )
 
+    return levels
 
 @c.type_check
 def maxflow(capacity: Matrix, source: int, sink: int):
@@ -205,18 +213,16 @@ def page_rank(
                 max_iters       = max_iters
         )
 
-    print("page_rank:", page_rank)
-
     return page_rank
  
 
 @c.type_check
-def sssp(matrix: Matrix, paths: Vector):
+def sssp(graph: Matrix, path: Vector):
 
     return c.algorithm(
             algorithm   = "sssp", 
-            matrix      = matrix, 
-            paths       = paths
+            graph       = graph, 
+            path        = path
     )
 
 @c.type_check

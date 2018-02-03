@@ -23,8 +23,8 @@ def scaled_identity(shape: int, scalar: (int, float)):
 @c.type_check
 def split(matrix: Matrix):
 
-    lower = matrix._out_container()
-    upper = matrix._out_container()
+    lower = Matrix(shape=matrix.shape, dtype=matrix.dtype)
+    upper = Matrix(shape=matrix.shape, dtype=matrix.dtype)
     c.utilities(
             "split",
             A = matrix,
