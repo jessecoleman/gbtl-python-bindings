@@ -199,6 +199,9 @@ class _Expression(ABC):
         self.evaluated[item] = value
         return self
 
+    def __mul__(self, other):
+        return self.evaluated * other
+
 
 class _BinaryExpression(_Expression):
 

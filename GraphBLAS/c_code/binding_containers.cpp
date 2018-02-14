@@ -1,5 +1,6 @@
 #include <string>
 #include <sstream>
+#include <fstream>
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -20,10 +21,8 @@ typedef DTYPE ScalarT;
 // matrix storage type
 typedef GraphBLAS::Matrix<ScalarT> MatrixT;
 typedef GraphBLAS::Vector<ScalarT> VectorT;
-
 typedef GraphBLAS::MatrixComplementView<MatrixT> MatrixComplementT;
 typedef GraphBLAS::VectorComplementView<VectorT> VectorComplementT;
-
 typedef GraphBLAS::TransposeView<MatrixT> MatrixTransposeT;
 
 
@@ -33,6 +32,12 @@ MatrixT init_sparse_matrix(
         IndexArrayT &i, 
         IndexArrayT &j, 
         std::vector<ScalarT> const &v); 
+
+MatrixT from_coomatrix_file(
+        std::string const &file_name);
+
+VectorT from_coovector_file(
+        std::string const &file_name);
 
 VectorT init_sparse_vector(
         IndexT &size,
@@ -120,6 +125,7 @@ void define_matrix(py::module &m)
         //}, py::is_operator());
 
     m.def("init_sparse_matrix", &init_sparse_matrix);
+    m.def("from_coomatrix_file", &from_coomatrix_file);
 }
 
 template <typename OtherVectorT>
@@ -164,6 +170,7 @@ void define_vector(py::module &m)
         //}, py::is_operator());
 
     m.def("init_sparse_vector", &init_sparse_vector);
+    m.def("from_coovector_file", &from_coovector_file);
 }
 
 // initialize matrix and return it
@@ -188,6 +195,59 @@ VectorT init_sparse_vector(
     VectorT v(size);
     v.build(i, vals);
     return v;
+}
+
+
+MatrixT from_coomatrix_file(std::string const &file_name) 
+{
+
+    std::ifstream infile(file_name);
+    IndexT rows, cols;
+    std::string dtype;
+    infile >> rows >> cols >> dtype;
+
+    MatrixT A(rows, cols);
+    IndexT src, dst;
+    DTYPE val;
+    IndexArrayT i, j;
+    std::vector<DTYPE> v;
+
+    while (infile)
+    {
+        infile >> src >> dst >> val;
+
+        i.push_back(src);
+        j.push_back(dst);
+        v.push_back(val);
+    }
+
+    A.build(i.begin(), j.begin(), v.begin(), i.size());
+    return A;
+}
+
+VectorT from_coovector_file(std::string const &file_name) 
+{
+    std::ifstream infile(file_name);
+    IndexT size;
+    std::string dtype;
+    infile >> size >> dtype;
+
+    VectorT u(size);
+
+    IndexT idx;
+    DTYPE val;
+    IndexArrayT i;
+    std::vector<DTYPE> v;
+    while (infile)
+    {
+        infile >> idx >> val;
+
+        i.push_back(idx);
+        v.push_back(val);
+    }
+
+    u.build(i.begin(), v.begin(), i.size());
+    return u;
 }
 
 MatrixComplementT matrix_complement(MatrixT const &m) 

@@ -233,6 +233,13 @@ def triangle_count(graph: Matrix):
     )
 
 @c.type_check
+def triangle_count_masked(graph: Matrix):
+    return c.algorithm(
+            algorithm   = "triangle_count_masked",
+            graph       = graph
+    )
+
+@c.type_check
 def triangle_count_newGBTL(l_matrix: Matrix, u_matrix: Matrix):
 
     return c.algorithm(

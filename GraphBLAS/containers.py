@@ -11,6 +11,11 @@ class Matrix(object):
         if m is None and (shape is None or dtype is None):
             raise ValueError("Please provide matrix or shape and dtype")
 
+        # read from file
+        if type(m) == str:
+            self._from_file(m)
+            return
+
         # copy constructor
         if isinstance(m, Matrix):
 
@@ -18,7 +23,7 @@ class Matrix(object):
             self.shape = m.shape
             module = c.container(self.dtype)
 
-            if copy == True:
+            if copy:
                 self.container = module.Matrix(m.container)
             else:
                 self.container = m.container
@@ -26,9 +31,9 @@ class Matrix(object):
 
         else:
             # get C++ module with declaration for Matrix class
-            if dtype is not None: 
+            if dtype is not None:
                 self.dtype = dtype
-            else: 
+            else:
                 self.dtype = c.get_type(m)
             module = c.container(self.dtype)
 
@@ -44,9 +49,9 @@ class Matrix(object):
         elif isinstance(m, tuple) and len(m) == 2:
             data, idx = m
             row_idx, col_idx = idx
-            if shape is not None: 
+            if shape is not None:
                 self.shape = shape
-            else: 
+            else:
                 self.shape = (max(row_idx) + 1, max(col_idx) + 1)
 
             self.container = module.init_sparse_matrix(
@@ -60,8 +65,17 @@ class Matrix(object):
                     *self.shape, [], [], []
             )
 
+    def _from_file(self, path_name):
+        with open(path_name) as f:
+            rows, cols, dtype = f.readline().split()
+            self.shape = (rows, cols)
+            self.dtype = eval(dtype)
+
+            module = c.container(self.dtype)
+            self.container = module.from_coomatrix_file(path_name)
+
     def __repr__(self):
-        #return "<{}x{} {} object with {} values>".format(*self.shape, type(self).__name__, self.nvals)
+        # return "<{}x{} {} object with {} values>".format(*self.shape, type(self).__name__, self.nvals)
         return str(self.container)
 
     def __eq__(self, other):
@@ -87,9 +101,6 @@ class Matrix(object):
 
         else:
             raise TypeError("{} must be of type {}".format(const, self.dtype))
-
-    #def __imul__(self, other):
-    #    if type(other) in ops.
 
     def __add__(self, other):
         from .operators import eWiseAdd
@@ -155,7 +166,7 @@ class Matrix(object):
 
             elif all(isinstance(i, int) for i in item):
                 return self.container.extractElement(*item)
-    
+   
             else:
                 raise TypeError("Mask must be a boolean matrix or [:] slice")
 
@@ -213,7 +224,7 @@ class Vector(object):
             self.shape = v.shape
             module = c.container(self.dtype)
 
-            if copy == True:
+            if copy:
                 self.container = module.Vector(v.container)
             else:
                 self.container = v.container
@@ -222,13 +233,12 @@ class Vector(object):
 
         else:
             # get C++ module with declaration for Matrix class
-            if dtype is not None: 
+            if dtype is not None:
                 self.dtype = dtype
-            else: 
+            else:
                 self.dtype = c.get_type(v)
 
             module = c.container(self.dtype)
-
 
         if isinstance(v, list):
             self.shape = (len(v),)
@@ -241,8 +251,10 @@ class Vector(object):
         # construct from tuple of arrays (data, vals)
         elif isinstance(v, tuple) and len(v) == 2:
             data, idx = v
-            if shape is not None: self.shape = shape
-            else: self.shape = (max(idx) + 1,)
+            if shape is not None:
+                self.shape = shape
+            else:
+                self.shape = (max(idx) + 1,)
             self.container = module.init_sparse_vector(
                     *self.shape, idx, data
             )
@@ -286,7 +298,6 @@ class Vector(object):
 
         else:
             raise TypeError("{} must be of type {}".format(const, self.dtype))
-
 
     def __add__(self, other):
         from .operators import eWiseAdd

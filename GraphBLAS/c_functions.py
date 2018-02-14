@@ -39,6 +39,17 @@ def container(dtype):
             kwargs = {"dtype": types[dtype]}
     )
 
+def bench(algorithm, **containers):
+
+    alg_group = algorithm_dict.get(algorithm, algorithm)
+
+    return get_function(
+            target      = "benchmarks",
+            function    = "benchmark_" + algorithm,
+            args        = [alg_group],
+            containers  = containers
+    )
+
 def operator(function, operation=None, accum=None, replace_flag=None, **containers):
 
     args = [function]
@@ -50,7 +61,7 @@ def operator(function, operation=None, accum=None, replace_flag=None, **containe
         operators = operation.__dict__
 
         # set default min identity
-        if operators.get("identity", None) == "MinIdentity":
+        if operators.get("add_identity", None) == "MinIdentity":
             args.append("min_identity")
 
         kwargs.update(operators)

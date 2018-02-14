@@ -51,6 +51,8 @@ typedef GraphBLAS::Vector<GRAPH_TYPE> VectorT;
 
 #elif defined(MIS)
 #include <algorithms/mis.hpp>
+typedef GraphBLAS::Matrix<GRAPH_TYPE> MatrixT;
+typedef GraphBLAS::Vector<INDEPENDENT_SET_TYPE> VectorT;
 #elif defined(MST)
 #include <algorithms/mst.hpp>
 #elif defined(PAGE_RANK)
@@ -111,7 +113,7 @@ PYBIND11_MODULE(MODULE, m) {
 //    m.def("batch_sssp", &algorithms::sssp<MatrixT, PathMatrixT>, "graph"_a, "paths"_a);
 #elif defined(TRIANGLE_COUNT)
     m.def("triangle_count", &algorithms::triangle_count<MatrixT>, "graph"_a);
-    //m.def("triangle_count_masked", &algorithms::triangle_count<MatrixT>, "L"_a);
+    m.def("triangle_count_masked", &algorithms::triangle_count_masked<MatrixT>, "graph"_a);
     //m.def("triangle_count_flame1", &algorithms::triangle_count<MatrixT>, "graph"_a);
     //m.def("triangle_count_flame1a", &algorithms::triangle_count<MatrixT>, "graph"_a);
     //m.def("triangle_count_flame2", &algorithms::triangle_count<MatrixT>, "graph"_a);
