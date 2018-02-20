@@ -1,8 +1,6 @@
 from abc import ABC, abstractmethod
-from attr import attrs, attrib
 from contextlib import ContextDecorator
 from functools import wraps
-import numpy as np
 
 from . import expressions as expr
 
@@ -48,7 +46,7 @@ class _Op(ABC):
         global _ops
         _ops.append(self)
         return self
-        
+
     def __exit__(self, *errors):
         global _ops
         # TODO pop vs. remove
@@ -107,7 +105,7 @@ class Monoid(BinaryOp, ContextDecorator):
 class Semiring(Monoid, ContextDecorator):
 
     def __init__(self, monoid, binary_op):
-        
+
         self.add_binary_op = monoid.add_binary_op
         self.add_identity = monoid.add_identity
         self.mult_binary_op = binary_op
@@ -116,36 +114,36 @@ class Semiring(Monoid, ContextDecorator):
 class Accumulator(BinaryOp, ContextDecorator):
 
     def __init__(self, binary_op):
-        
+
         self.binary_op = binary_op
 
     def __enter__(self):
-        
+
         global _accum
         _accum.append(self)
         return self
 
     def __exit__(self, *errors):
-        
+
         global _accum
         _accum.pop()
         return False
 
 
 class ReplaceFlag(ContextDecorator):
-    
+
     def __init__(self, flag):
-        
+
         self.flag = flag
 
     def __enter__(self):
-        
+
         global _replace
         _replace.append(self)
         return self
 
     def __exit__(self, *args):
-        
+
         global _replace
         _replace.pop()
         return False
@@ -195,31 +193,37 @@ def get_accum():
 def get_replace():
     return _replace[-1].flag
 
-# function decorator to fill in operator from context if not provided
-def operator_type(op_type):
-    
-    def wrapper(function):
 
-        @wraps(function)
+# function decorator to fill in operator from context if not provided
+def operator_type(op_type, mult=False):
+
+    def wrapper(operation):
+
+        @wraps(operation)
         def new_func(*args):
 
-            operator, *args = args
+            args = list(args)
 
-            if operator is None:
-                for op in reversed(_ops):
-                    if isinstance(op, op_type):
-                        operator = op
-                        break
+            if not isinstance(args[0], op_type):
+                if not isinstance(args[0], _Op):
+                    for op in reversed(_ops):
+                        if isinstance(op, op_type):
+                            # TODO
+                            if mult and isinstance(op, Semiring):
+                                args.insert(0, BinaryOp(op.mult_binary_op))
+                            else:
+                                args.insert(0, op)
+                            break
+                else:
+                    raise Exception("operator must be {}".format(op_type))
 
-            elif not isinstance(operator, op_type):
-                raise Exception("operator must be of type {}".format(op_type))
+            return operation(*args)
 
-            return function(operator, *args)
-        
         return new_func
 
     return wrapper
-            
+
+
 # TODO consider lazy evaluation here
 def eval_expressions(function):
 
@@ -236,6 +240,7 @@ def eval_expressions(function):
 
     return new_func
 
+
 @eval_expressions
 @operator_type(Semiring)
 def mxm(semiring, A, B, C=None):
@@ -245,6 +250,7 @@ def mxm(semiring, A, B, C=None):
 
     else:
         raise Exception("rows of A and columns of B must be equal")
+
 
 @eval_expressions
 @operator_type(Semiring)
@@ -256,6 +262,7 @@ def vxm(semiring, A, B, C=None):
 
     else:
         raise Exception("length of A and columns of B must be equal")
+
 
 @eval_expressions
 @operator_type(Semiring)
@@ -269,7 +276,7 @@ def mxv(semiring, A, B, C=None):
 
 
 @eval_expressions
-@operator_type(BinaryOp)
+@operator_type(BinaryOp, mult=True)
 def eWiseMult(binary_op, A, B, C=None):
 
     if 1 == len(A.shape) == len(B.shape):
@@ -295,8 +302,9 @@ def eWiseAdd(binary_op, A, B, C=None):
     else:
         raise Exception("A and B must have the same dimension")
 
+
 @eval_expressions
-#@operator_type(UnaryOp)
+@operator_type(UnaryOp)
 def apply(unary_op, A, C=None):
 
     if 2 == len(A.shape):
@@ -305,6 +313,8 @@ def apply(unary_op, A, C=None):
     elif 1 == len(A.shape):
         return expr.ApplyVector(unary_op, A, C)
 
+
+# TODO allow no value for monoid
 @eval_expressions
 @operator_type(Monoid)
 def reduce(monoid, A, C=None):
@@ -315,28 +325,30 @@ def reduce(monoid, A, C=None):
     elif 1 == len(A.shape):
         return expr.ReduceVector(monoid, A, C)
 
+
 # TODO
 @eval_expressions
 def extract(A, indices=None, C=None, M=None, accum=None, replace_flag=False):
-    
+
     if len(A.shape) == 2:
         idx = expr.IndexedMatrix(A, indices)
 
     elif len(A.shape) == 1:
         idx = expr.IndexedVector(A, indices)
-    
+
     if C is not None:
         return idx.eval(C, M, accum, replace_flag)
 
     else:
         return idx
+
 
 @eval_expressions
 def assign(A, indices=None, C=None, M=None, accum=None, replace_flag=False):
 
     if len(A.shape) == 2:
         idx = expr.IndexedMatrix(A, indices)
-        
+
     elif len(A.shape) == 1:
         idx = expr.IndexedVector(A, indices)
 
@@ -345,6 +357,7 @@ def assign(A, indices=None, C=None, M=None, accum=None, replace_flag=False):
 
     else:
         return idx
+
 
 @eval_expressions
 def transpose(A, C=None):

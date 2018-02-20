@@ -8,8 +8,9 @@ import zlib
 
 # compiler flags
 CXX         = "g++"
+#CXX         = "clang"
 LANG	    = "-std=c++14"
-OPTS	    = "-O3 -march=native -DNDEBUG -shared -fPIC -fvisibility=hidden"
+OPTS	    = "-O3 -march=native -DNDEBUG -shared -fPIC -fvisibility=hidden" #-flto=thin"
 PICKY	    = "-Wall"
 DEBUG 	    = "-g"
 FLAGS       = "-DHAVE_CONFIG_H -DGB_USE_SEQUENTIAL"
@@ -18,7 +19,7 @@ FLAGS       = "-DHAVE_CONFIG_H -DGB_USE_SEQUENTIAL"
 CWD         = inspect.getfile(inspect.currentframe()).rsplit("/", 1)[0]
 sys.path.append(CWD)
 
-GB_SOURCE   = "/home/jessecoleman/graphpack/gbtl/src"
+GB_SOURCE   = "/home/jessecoleman/gbtl/src"
 MODULES     = os.path.abspath("{cwd}/modules".format(cwd=CWD))
 C_CODE      = os.path.abspath("{cwd}/c_code".format(cwd=CWD))
 #TODO dynamically configure this with cmake
@@ -76,7 +77,7 @@ def get_module(target, args, kwargs):
             ),
             "-DMODULE={}".format(module),
             *("-D{arg}".format(
-                    arg=str(a).upper()) 
+                    arg=str(a).upper())
                     for a in args
             ),
             *("-D{key}={arg}".format(
@@ -92,6 +93,7 @@ def get_module(target, args, kwargs):
             "GraphBLAS.modules.{mod}".format(mod=module)
     )
 
+
 # dictionary that fetches missing modules by calling get_module()
 class Cache(dict):
 
@@ -105,7 +107,7 @@ class Cache(dict):
         # moduleID is only dependent on target and types
         module = dict.__getitem__(self, (
             target,
-            tuple(sorted(args)), 
+            tuple(sorted(args)),
             tuple(sorted(kwargs.items()))
         ))
 
@@ -114,6 +116,7 @@ class Cache(dict):
     def __missing__(self, args):
         self[args] = get_module(*args)
         return dict.__getitem__(self, args)
-            
+
+
 cache = Cache()
 

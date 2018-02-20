@@ -67,7 +67,7 @@ def operator(function, operation=None, accum=None, replace_flag=None, **containe
         kwargs.update(operators)
 
     # set default accumulate operator
-    if accum is None:
+    if not accum:
         args.append("no_accum")
 
     else:

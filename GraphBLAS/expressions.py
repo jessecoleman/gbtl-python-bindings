@@ -8,7 +8,6 @@ from . import containers
 __all__ = [
         "ApplyExpression",
         "ReduceExpression",
-        "BinaryExpression",
         "MaskedExpression"
 ]
 
@@ -18,32 +17,37 @@ __all__ = [
 ###############################################################################
 
 # decorator for expression.eval() to memoize results
-def memoize(func):
+def memoize(eval):
 
-    @wraps(func)
-    def new_func(self, *args, **kwargs):
+    @wraps(eval)
+    def memoized_eval(expr, *args, **kwargs):
 
-        C = func(self, *args, **kwargs)
-        self._eval = C
-        return C
+        expr._eval = eval(expr, *args, **kwargs)
+        return expr._eval
 
-    return new_func
+    return memoized_eval
 
-def convert_mask(func):
 
-    @wraps(func)
-    def new_func(self, C=None, M=None, accum=None, replace_flag=None):
+def capture_operators(eval):
+
+    @wraps(eval)
+    def captured_eval(expr, C=None, M=None, accum=False, replace_flag=False):
+        from .operators import get_accum
 
         if M is None:
             M = no_mask
 
-        if type(C) == MaskedMatrix or type(C) == MaskedVector:
-            return func(self, C.C, C.M, C.accum, C.replace_flag)
-        
-        else:
-            return func(self, C, M, accum, replace_flag)
+        if accum:
+            accum = get_accum()
 
-    return new_func
+        if isinstance(C, (MaskedMatrix, MaskedVector)):
+            return eval(expr, C.C, C.M, accum, replace_flag)
+
+        else:
+            return eval(expr, C, M, accum, replace_flag)
+
+    return captured_eval
+
 
 class NoMask(object):
 
@@ -51,39 +55,31 @@ class NoMask(object):
         self.container = c_func.no_mask()
         self.dtype = None
 
+
 class AllIndices(object):
 
     def __init__(self):
         self.container = c_func.all_indices()
 
+
 no_mask = NoMask()
 all_indices = AllIndices()
+
 
 # TODO
 # indexing into MaskedContainer returns indexed expression
 class MaskedMatrix(object):
 
-    def __init__(self, C, M):
-        from .operators import get_replace
-
+    def __init__(self, C, M, replace_flag=False):
         self.dtype = C.dtype
         self.C = C
         self.M = M
-        self.accum = None
-        self.replace_flag = get_replace()
+        self.replace_flag = replace_flag
 
     # self.__setitem__(item, self.__getitem(item).__iadd__(value))
     def __iadd__(self, A):
-        from .operators import get_accum
-
-        self.accum = get_accum()
-
-        if isinstance(A, _Expression):
-            # TODO avoid double execution of assign
-            return A.eval(self)
-
-        else:
-            return NotImplemented
+        # TODO avoid double execution
+        return self.assign(A, accum=True)
 
     # TODO debug
     def __getitem__(self, indices):
@@ -102,16 +98,24 @@ class MaskedMatrix(object):
 
         return self[indices].assign(value)
 
-    def assign(self, A):
+    def assign(self, A, accum=False):
+        from .operators import apply, Identity
 
         # evaluate expression into self
         if isinstance(A, _Expression):
-            return A.eval(self)
+            return A.eval(
+                    self, 
+                    accum=accum, 
+                    replace_flag=self.replace_flag
+            )
 
-        # copy constructor
+        # copy constructor with cast
         elif isinstance(A, containers.Vector):
-            from operators import Identity
-            return apply(Identity, A).eval(self) 
+            return apply(Identity, A).eval(
+                    self, 
+                    accum=accum, 
+                    replace_flag=self.replace_flag
+            )
 
         else:
             return NotImplemented
@@ -119,22 +123,16 @@ class MaskedMatrix(object):
 
 class MaskedVector(object):
 
-    def __init__(self, C, M):
-        from .operators import get_replace
-
+    def __init__(self, w, m, replace_flag=False):
         self.dtype = C.dtype
-        self.C = C
-        self.M = M
-        self.accum = None
-        self.replace_flag = get_replace()
+        self.w = w
+        self.m = m
+        self.accum = False
+        self.replace_flag = replace_flag
 
     # self.__setitem__(item, self.__getitem(item).__iadd__(value))
-    def __iadd__(self, A):
-        from .operators import get_accum
-
-        self.accum = get_accum()
-        # TODO avoid double execution of assign
-        return self.assign(A)
+    def __iadd__(self, u):
+        return self.assign(u, accum=True)
 
     def __getitem__(self, indices):
         return IndexedVector(self, indices)
@@ -142,15 +140,23 @@ class MaskedVector(object):
     def __setitem__(self, indices, value):
         return self[indices].assign(value)
 
-    def assign(self, A):
+    def assign(self, A, accum=False):
         from .operators import apply, Identity
 
         # evaluate expression into self
         if isinstance(A, _Expression):
-            return A.eval(self)
+            return A.eval(
+                    self, 
+                    accum=accum, 
+                    replace_flag=self.replace_flag
+            )
 
         elif isinstance(A, containers.Vector):
-            return apply(Identity, A).eval(self) 
+            return apply(Identity, A).eval(
+                    self, 
+                    accum=accum, 
+                    replace_flag=self.replace_flag
+            )
 
         # TODO ???
         else:
@@ -158,9 +164,10 @@ class MaskedVector(object):
 
 
 class _Expression(ABC):
-    
+
     @abstractmethod
-    def eval(self, C=None, M=no_mask, accum=None, replace_flag=False): pass
+    def eval(self, C=None, M=no_mask, accum=None, replace_flag=False): 
+        pass
 
     @property
     def evaluated(self):
@@ -203,7 +210,7 @@ class _Expression(ABC):
         return self.evaluated * other
 
 
-class _BinaryExpression(_Expression):
+class EWiseAddMatrix(_Expression):
 
     def __init__(self, op, A, B, C):
 
@@ -214,14 +221,9 @@ class _BinaryExpression(_Expression):
         if C is not None:
             return self.eval(C)
 
-
-class EWiseAddMatrix(_BinaryExpression):
-
     @memoize
-    @convert_mask
+    @capture_operators
     def eval(self, C, M, accum, replace_flag):
-
-        assert(self.A.shape == self.B.shape)
 
         # construct appropriate container
         if C is None:
@@ -250,25 +252,32 @@ class EWiseAddMatrix(_BinaryExpression):
         return C
 
 
-class EWiseAddVector(_BinaryExpression):
+class EWiseAddVector(_Expression):
+
+    def __init__(self, op, u, v, w):
+
+        self.op = op
+        self.u = u
+        self.v = v
+
+        if w is not None:
+            return self.eval(w)
 
     @memoize
-    @convert_mask
-    def eval(self, C, M, accum, replace_flag):
-
-        assert(self.A.shape == self.B.shape)
+    @capture_operators
+    def eval(self, w, m, accum, replace_flag):
 
         # construct appropriate container
-        if C is None:
+        if w is None:
 
-            c_type = c_func.upcast(self.A.dtype, self.B.dtype)
+            w_type = c_func.upcast(self.u.dtype, self.v.dtype)
 
-            C = containers.Vector(
-                    shape=self.A.shape,
-                    dtype=c_type
+            w = containers.Vector(
+                    shape=self.u.shape,
+                    dtype=w_type
             )
 
-        elif not isinstance(C, containers.Vector):
+        elif not isinstance(w, containers.Vector):
             return NotImplemented
 
         c_func.operator(
@@ -276,22 +285,29 @@ class EWiseAddVector(_BinaryExpression):
             operation       = self.op,
             accum           = accum,
             replace_flag    = replace_flag,
-            A               = self.A,
-            B               = self.B,
-            C               = C,
-            M               = M
+            u               = self.u,
+            v               = self.v,
+            w               = w,
+            m               = m
         )
 
-        return C
+        return w
 
 
-class EWiseMultMatrix(_BinaryExpression):
+class EWiseMultMatrix(_Expression):
+
+    def __init__(self, op, A, B, C):
+
+        self.op = op
+        self.A = A
+        self.B = B
+
+        if C is not None:
+            return self.eval(C)
 
     @memoize
-    @convert_mask
+    @capture_operators
     def eval(self, C, M, accum, replace_flag):
-
-        assert(self.A.shape == self.B.shape)
 
         # construct appropriate container
         if C is None:
@@ -320,25 +336,32 @@ class EWiseMultMatrix(_BinaryExpression):
         return C
 
 
-class EWiseMultVector(_BinaryExpression):
+class EWiseMultVector(_Expression):
+
+    def __init__(self, op, u, v, w):
+
+        self.op = op
+        self.u = u
+        self.v = v
+
+        if w is not None:
+            return self.eval(w)
 
     @memoize
-    @convert_mask
-    def eval(self, C, M, accum, replace_flag):
-
-        assert(self.A.shape == self.B.shape)
+    @capture_operators
+    def eval(self, w, m, accum, replace_flag):
 
         # construct appropriate container
-        if C is None:
+        if w is None:
 
-            c_type = c_func.upcast(self.A.dtype, self.B.dtype)
+            w_type = c_func.upcast(self.u.dtype, self.v.dtype)
 
-            C = containers.Vector(
-                    shape=self.A.shape,
-                    dtype=c_type
+            w = containers.Vector(
+                    shape=self.u.shape,
+                    dtype=w_type
             )
 
-        elif not isinstance(C, containers.Vector):
+        elif not isinstance(w, containers.Vector):
             return NotImplemented
 
         result = c_func.operator(
@@ -346,19 +369,28 @@ class EWiseMultVector(_BinaryExpression):
             operation       = self.op,
             accum           = accum,
             replace_flag    = replace_flag,
-            A               = self.A,
-            B               = self.B,
-            C               = C,
-            M               = M
+            u               = self.u,
+            v               = self.v,
+            w               = w,
+            m               = m
         )
 
-        return C
+        return w
 
 
-class MXM(_BinaryExpression):
+class MXM(_Expression):
+
+    def __init__(self, op, A, B, C):
+
+        self.op = op
+        self.A = A
+        self.B = B
+
+        if C is not None:
+            return self.eval(C)
 
     @memoize
-    @convert_mask
+    @capture_operators
     def eval(self, C, M, accum, replace_flag):
 
         # construct appropriate container
@@ -366,7 +398,6 @@ class MXM(_BinaryExpression):
 
             c_type = c_func.upcast(self.A.dtype, self.B.dtype)
 
-            assert(self.A.shape[0] == self.B.shape[1])
             C = containers.Matrix(
                     shape=(self.B.shape[0], self.A.shape[1]),
                     dtype=c_type
@@ -389,24 +420,32 @@ class MXM(_BinaryExpression):
         return C
 
 
-class MXV(_BinaryExpression):
+class MXV(_Expression):
+
+    def __init__(self, op, A, v, w):
+
+        self.op = op
+        self.A = A
+        self.v = v
+
+        if w is not None:
+            return self.eval(w)
 
     @memoize
-    @convert_mask
-    def eval(self, C, M, accum, replace_flag):
+    @capture_operators
+    def eval(self, w, m, accum, replace_flag):
 
         # construct appropriate container
-        if C is None:
+        if w is None:
 
-            c_type = c_func.upcast(self.A.dtype, self.B.dtype)
+            w_type = c_func.upcast(self.A.dtype, self.v.dtype)
 
-            assert(self.A.shape[1] == self.B.shape[0])
-            C = containers.Vector(
+            w = containers.Vector(
                     shape=(self.A.shape[0],),
-                    dtype=c_type
+                    dtype=w_type
             )
 
-        elif not isinstance(C, containers.Vector):
+        elif not isinstance(w, containers.Vector):
             return NotImplemented
 
         c_func.operator(
@@ -415,32 +454,40 @@ class MXV(_BinaryExpression):
             accum           = accum,
             replace_flag    = replace_flag,
             A               = self.A,
-            B               = self.B,
-            C               = C,
-            M               = M
+            v               = self.v,
+            w               = w,
+            m               = m
         )
 
-        return C
+        return w
 
 
-class VXM(_BinaryExpression):
+class VXM(_Expression):
+
+    def __init__(self, op, u, B, w):
+
+        self.op = op
+        self.u = u
+        self.B = B
+
+        if w is not None:
+            return self.eval(w)
 
     @memoize
-    @convert_mask
-    def eval(self, C, M, accum, replace_flag):
+    @capture_operators
+    def eval(self, w, m, accum, replace_flag):
 
         # construct appropriate container
-        if C is None:
+        if w is None:
 
-            c_type = c_func.upcast(self.A.dtype, self.B.dtype)
+            w_type = c_func.upcast(self.u.dtype, self.B.dtype)
 
-            assert(self.A.shape[0] == self.B.shape[0])
-            C = containers.Vector(
-                    shape=(self.A.shape[0],),
-                    dtype=c_type
+            w = containers.Vector(
+                    shape=(self.u.shape[0],),
+                    dtype=w_type
             )
 
-        elif not isinstance(C, containers.Vector):
+        elif not isinstance(w, containers.Vector):
             return NotImplemented
 
         c_func.operator(
@@ -448,13 +495,13 @@ class VXM(_BinaryExpression):
             operation       = self.op,
             accum           = accum,
             replace_flag    = replace_flag,
-            A               = self.A,
+            u               = self.u,
             B               = self.B,
-            C               = C,
-            M               = M
+            w               = w,
+            m               = m
         )
 
-        return C
+        return w
 
 
 class ApplyMatrix(_Expression):
@@ -468,7 +515,7 @@ class ApplyMatrix(_Expression):
             return self.eval(C)
 
     @memoize
-    @convert_mask
+    @capture_operators
     def eval(self, C, M, accum, replace_flag):
 
         if C is None:
@@ -493,23 +540,23 @@ class ApplyMatrix(_Expression):
 
 class ApplyVector(_Expression):
 
-    def __init__(self, op, A, C=None):
+    def __init__(self, op, u, w=None):
 
         self.op = op
-        self.A = A
+        self.u = u
 
-        if C is not None:
-            return self.eval(C)
+        if w is not None:
+            return self.eval(w)
 
     @memoize
-    @convert_mask
-    def eval(self, C, M, accum, replace_flag):
+    @capture_operators
+    def eval(self, w, m, accum, replace_flag):
 
-        if C is None:
+        if w is None:
 
-            C = containers.Vector(
-                    shape=self.A.shape,
-                    dtype=self.A.dtype
+            w = containers.Vector(
+                    shape=self.u.shape,
+                    dtype=self.u.dtype
             )
 
         c_func.operator(
@@ -517,53 +564,55 @@ class ApplyVector(_Expression):
             operation       = self.op,
             accum           = accum,
             replace_flag    = replace_flag,
-            A               = self.A,
-            C               = C,
-            M               = M
+            u               = self.u,
+            w               = w,
+            m               = m
         )
 
-        return C
+        return w
 
 
 class ReduceMatrix(_Expression):
-    
-    def __init__(self, reduce, A, C=None):
 
-        self.reduce = reduce
+    def __init__(self, op, A, s=None):
+
+        self.op = op
         self.A = A
 
-        if C is not None:
-            return self.eval(C)
+        if s is not None:
+            return self.eval(s)
 
     @memoize
-    @convert_mask
-    def eval(self, C, M, accum, replace_flag):
+    @capture_operators
+    def eval(self, x, m, accum, replace_flag):
 
-        function = "reduceMatrix"
         kwargs = {"A": self.A}
 
         # reduce to a scalar
-        if C is None:
-            kwargs["C"] = self.reduce.identity
+        if x is None:
+            function = "reduceMatrix"
+            kwargs["s"] = self.reduce.identity
 
         # reduce to a scalar with initial value
-        elif isinstance(C, self.A.dtype):
-            kwargs["C"] = C
+        elif (c_func.types.keys().index(self.A.dtype) <
+                c_func.types.keys().index(x)):
+            function = "reduceMatrix"
+            kwargs["s"] = x
 
         # reduce to a vector
-        elif isinstance(C, containers.Vector):
+        elif isinstance(x, containers.Vector):
             function = "reduceMatrixVector"
-            kwargs["C"] = C
-            kwargs["M"] = M
+            kwargs["w"] = x
+            kwargs["m"] = m
             kwargs["accum"] = accum
             kwargs["replace_flag"] = replace_flag
 
         else:
-            raise TypeError("Can't reduce to {}".format(type(C)))
+            raise TypeError("Can't reduce to {}".format(type(x)))
 
         result = c_func.operator(
                 function        = function,
-                operation       = self.reduce,
+                operation       = self.op,
                 **kwargs
         )
 
@@ -571,37 +620,39 @@ class ReduceMatrix(_Expression):
 
 
 class ReduceVector(_Expression):
-    
-    def __init__(self, reduce, A, C=None):
 
-        self.reduce = reduce
-        self.A = A
+    def __init__(self, op, u, s=None):
 
-        if C is not None:
-            return self.eval(C)
+        self.op = op
+        self.u = u
+
+        if s is not None:
+            return self.eval(s)
 
     @memoize
-    @convert_mask
-    def eval(self, C, M, accum, replace_flag):
+    @capture_operators
+    def eval(self, s, m, accum, replace_flag):
 
         # reduce to a scalar
-        if C is None:
-            C = self.reduce.identity
+        if s is None:
+            s = self.reduce.identity
 
-        elif not isinstance(C, self.A.dtype):
-            raise TypeError("Can't reduce to {}".format(type(C)))
+        elif (c_func.types.keys().index(self.A.dtype) >
+                c_func.types.keys().index(s)):
+            raise TypeError("Can't reduce to {}".format(type(s)))
 
         result = c_func.operator(
                 function        = "reduceVector",
-                operation       = self.reduce,
+                operation       = self.op,
                 accum           = accum,
                 replace_flag    = replace_flag,
-                A               = self.A,
-                C               = C
+                u               = self.u,
+                s               = s
         )
 
         return result
 
+    # TODO
     def __div__(self, other):
         return self.evaluated / other
 
@@ -609,23 +660,21 @@ class ReduceVector(_Expression):
 # acts as LHS if performing assign, RHS if performing extract
 class IndexedMatrix(_Expression):
 
-    def __init__(self, A, indices):
+    def __init__(self, X, indices):
 
         # forces LHS evaluation
-        if isinstance(A, MaskedMatrix):
+        if isinstance(X, MaskedMatrix):
             self.LHS = True
-            self.C = A.C
-            self.M = A.M
-            self.accum = A.accum
-            self.replace_flag = A.replace_flag
-
+            self.C = X.C
+            self.M = X.M
+            self.replace_flag = X.replace_flag
 
         # can be used as LHS or RHS
         else:
             self.LHS = False
-            self.C = A
+            self.A = X
+            self.C = X
             self.M = no_mask
-            self.accum = None
             # TODO figure out this bs
             self.replace_flag = False
 
@@ -636,7 +685,7 @@ class IndexedMatrix(_Expression):
             if i == slice(None):
                 self.idx[dim + "_indices"] = all_indices
 
-            elif isinstance(i, slice): 
+            elif isinstance(i, slice):
                 self.idx[dim + "_indices"] = range(*i.indices(s))
 
             elif isinstance(i, (list, np.ndarray)):
@@ -651,15 +700,11 @@ class IndexedMatrix(_Expression):
     # accum expression will be evaluated by __setitem__ of underlying container
     # self.__setitem__(item, self.__getitem__(item).__iadd__(value))
     def __iadd__(self, A):
-        from .operators import get_accum
-
-        self.accum = get_accum()
-        # TODO avoid double execution
-        return A.eval(self)
+        return self.assign(A, accum=True)
 
     # extract operation
     @memoize
-    @convert_mask
+    @capture_operators
     def eval(self, C, M, accum, replace_flag):
 
         if self.LHS:
@@ -672,21 +717,21 @@ class IndexedMatrix(_Expression):
             if "row_index" in self.idx:
                 C = containers.Vector(
                         shape=(len(self.idx["col_indices"]),),
-                        dtype = self.A.dtype
+                        dtype=self.A.dtype
                 )
 
             # extract column
             elif "col_index" in self.idx:
                 C = containers.Vector(
                         shape=(len(self.idx["row_indices"]),),
-                        dtype = self.A.dtype
+                        dtype=self.A.dtype
                 )
 
             # extract submatrix
             else:
                 C = containers.Matrix(
                         shape=(
-                            len(self.idx["row_indices"]), 
+                            len(self.idx["row_indices"]),
                             len(self.idx["col_indices"])
                         ),
                         dtype=self.A.dtype
@@ -704,29 +749,32 @@ class IndexedMatrix(_Expression):
         else:
             raise TypeError("Incorrect parameter types")
 
-        result = c_func.operator(
+        c_func.operator(
                 function        = function,
                 accum           = accum,
                 replace_flag    = replace_flag,
                 C               = C,
                 M               = M,
-                A               = self.C,
+                A               = self.A,
                 **self.idx
         )
 
         return C
-                    
+
     # LHS expression evaluation
     @memoize
-    def assign(self, A):
+    def assign(self, A, accum=False):
 
         if isinstance(A, _Expression):
             A = A.eval()
-   
+
+        kwargs = {}
+
         # constant assignment to indices
         if isinstance(A, self.C.dtype):
 
             function = "assignMatrixConst"
+            kwargs["val"] = A
 
             if "row_index" in self.idx:
                 self.idx["row_indices"] = [self.idx["row_index"]]
@@ -739,15 +787,17 @@ class IndexedMatrix(_Expression):
         # TODO assign from expression behavior not supported
         elif isinstance(A, containers.Matrix):
             function = "assignSubmatrix"
+            kwargs["A"] = A
 
         elif isinstance(A, containers.Vector):
-            
+
+            kwargs["u"] = A
             if "row_index" in self.idx:
                 function = "assignMatrixRow"
 
             elif "col_index" in self.idx:
                 function = "assignMatrixCol"
-                
+
         else:
             raise TypeError("Can't assign from non-matrix type")
 
@@ -755,11 +805,11 @@ class IndexedMatrix(_Expression):
         c_func.operator(
                 function        = function,
                 replace_flag    = self.replace_flag,
-                accum           = self.accum,
+                accum           = accum,
                 C               = self.C,
                 M               = self.M,
-                A               = A,
-                **self.idx
+                **self.idx,
+                **kwargs
         )
 
         return self.C
@@ -767,24 +817,21 @@ class IndexedMatrix(_Expression):
 
 class IndexedVector(_Expression):
 
-    def __init__(self, A, index):
+    def __init__(self, x, index):
 
         # forces LHS evaluation
-        if isinstance(A, MaskedVector):
+        if isinstance(x, MaskedVector):
             self.LHS = True
-            self.C = A.C
-            self.M = A.M
-            self.accum = A.accum
-            self.replace_flag = A.replace_flag
-
+            self.w = x.w
+            self.m = x.m
+            self.replace_flag = x.replace_flag
 
         # can be used as LHS or RHS
         else:
             self.LHS = False
-            self.C = A
-            self.M = no_mask
-            self.accum = None
-            # TODO broken
+            self.u = x
+            self.w = x
+            self.m = no_mask
             self.replace_flag = False
 
         self.idx = dict()
@@ -792,61 +839,61 @@ class IndexedVector(_Expression):
         if index == slice(None):
             self.idx["indices"] = all_indices
 
-        elif isinstance(index, slice): 
-            self.idx["indices"] = range(*index.indices(self.C.shape[0]))
+        elif isinstance(index, slice):
+            self.idx["indices"] = range(*index.indices(self.w.shape[0]))
 
         elif isinstance(index, (list, np.ndarray)):
-            self.idx["indices"] = i
+            self.idx["indices"] = index
 
         else:
             raise TypeError("Mask must be boolean Matrix or 2D slice with optional replace flag")
 
-    # TODO fix broken stuff
     # accum expression will be evaluated by __setitem__ of underlying container
     # self.__setitem__(item, self.__getitem__(item).__iadd__(value))
-    def __iadd__(self, A):
-        from .operators import get_accum
-
-        self.accum = get_accum()
-        return A.eval(self)
+    def __iadd__(self, u):
+        return self.assign(u, accum=True)
 
     @memoize
-    @convert_mask
-    def eval(self, C, M, accum, replace_flag):
+    @capture_operators
+    def eval(self, w, m, accum, replace_flag):
 
         if self.LHS:
             raise TypeError("Mask can only be applied to LHS")
 
-        if C is None:
+        if w is None:
 
-            C = containers.Vector(
+            w = containers.Vector(
                     shape=(len(self.idx["indices"]),),
-                    dtype=self.C.dtype
+                    dtype=self.w.dtype
             )
 
         c_func.operator(
                 function        = "extractSubvector",
                 accum           = accum,
                 replace_flag    = replace_flag,
-                C               = C,
-                M               = M,
-                A               = self.C,
+                w               = w,
+                m               = m,
+                u               = self.u,
                 **self.idx
         )
 
-        return C
+        return w
 
     @memoize
-    def assign(self, A):
+    def assign(self, u, accum=False):
 
-        if isinstance(A, _Expression):
-            A = A.eval()
+        if isinstance(u, _Expression):
+            u = u.eval()
 
-        if isinstance(A, self.C.dtype):
+        kwargs = {}
+
+        if isinstance(u, self.w.dtype):
             function = "assignVectorConst"
+            kwargs["val"] = u
 
-        elif isinstance(A, containers.Vector):
+        elif isinstance(u, containers.Vector):
             function = "assignSubvector"
+            kwargs["u"] = u
 
         else:
             raise TypeError("Can't assign from non-matrix type")
@@ -854,14 +901,15 @@ class IndexedVector(_Expression):
         c_func.operator(
                 function        = function,
                 replace_flag    = self.replace_flag,
-                accum           = self.accum,
-                C               = self.C,
-                M               = self.M,
-                A               = A,
-                **self.idx
+                accum           = accum,
+                w               = self.w,
+                m               = self.m,
+                **self.idx,
+                **kwargs
         )
 
-        return self.C
+        return self.w
+
 
 # TODO don't eval transpose unless necessary
 # Try to use transpose view where possible
@@ -869,9 +917,9 @@ class Transpose(_Expression):
 
     def __init__(self, A):
         self.A = A
-    
+
     @memoize
-    @convert_mask
+    @capture_operators
     def eval(self, C, M, accum, replace_flag):
 
         if C is None:
@@ -891,4 +939,3 @@ class Transpose(_Expression):
         )
 
         return C
-
