@@ -2,6 +2,17 @@ import numpy as np
 from scipy import sparse
 from . import c_functions as c
 
+NetworkXGraphs = [
+       'DiGraph', 
+       'Graph', 
+       'MultiDiGraph', 
+       'MultiGraph', 
+       'OrderedDiGraph', 
+       'OrderedGraph', 
+       'OrderedMultiDiGraph', 
+       'OrderedMultiGraph'
+]
+
 
 class Matrix(object):
 
@@ -11,6 +22,7 @@ class Matrix(object):
         if m is None and (shape is None or dtype is None):
             raise ValueError("Please provide matrix or shape and dtype")
 
+        # TODO better interface
         # read from file
         if type(m) == str:
             self._from_file(m)
@@ -36,6 +48,10 @@ class Matrix(object):
             else:
                 self.dtype = c.get_type(m)
             module = c.container(self.dtype)
+
+        # construct from NetworkX Graph
+        if isinstance(m, (nx.Graph, nx.DiGraph)):
+            m = nx.to_scipy_sparse_matrix(m, format="coo")
 
         # construct from scipy sparse matrix
         if (sparse.issparse(m)):
@@ -104,33 +120,33 @@ class Matrix(object):
 
     def __add__(self, other):
         from .operators import eWiseAdd
-        return eWiseAdd(None, self, other)
+        return eWiseAdd(self, other)
 
     def __radd__(self, other):
         from .operators import eWiseAdd
-        return eWiseAdd(None, other, self)
+        return eWiseAdd(other, self)
 
     def __mul__(self, other):
         from .operators import eWiseMult
-        return eWiseMult(None, self, other)
+        return eWiseMult(self, other)
 
     def __rmul__(self, other):
         from .operators import eWiseMult
-        return eWiseMult(None, other, self)
+        return eWiseMult(other, self)
 
     def __matmul__(self, other):
         from .operators import mxm, mxv
         if isinstance(other, Matrix):
-            return mxm(None, self, other)
+            return mxm(self, other)
         elif isinstance(other, Vector):
-            return mxv(None, self, other)
+            return mxv(self, other)
 
     def __rmatmul__(self, other):
         from .operators import mxm, vxm
         if isinstance(other, Matrix):
-            return mxm(None, other, self)
+            return mxm(other, self)
         elif isinstance(other, Vector):
-            return vxm(None, other, self)
+            return vxm(other, self)
 
     @property
     def T(self):
@@ -301,27 +317,27 @@ class Vector(object):
 
     def __add__(self, other):
         from .operators import eWiseAdd
-        return eWiseAdd(None, self, other)
+        return eWiseAdd(self, other)
 
     def __radd__(self, other):
         from .operators import eWiseAdd
-        return eWiseAdd(None, other, self)
+        return eWiseAdd(other, self)
 
     def __mul__(self, other):
         from .operators import eWiseMult
-        return eWiseMult(None, self, other)
+        return eWiseMult(self, other)
 
     def __rmul__(self, other):
         from .operators import eWiseMult
-        return eWiseMult(None, other, self)
+        return eWiseMult(other, self)
 
     def __matmul__(self, other):
         from .operators import vxm
-        return vxm(None, self, other)
+        return vxm(self, other)
 
     def __rmatmul__(self, other):
         from .operators import mxv
-        return mxv(None, other, self)
+        return mxv(other, self)
 
     def __invert__(self):
         return VectorComplement(self)
