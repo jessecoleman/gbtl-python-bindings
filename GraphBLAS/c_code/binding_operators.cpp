@@ -22,6 +22,8 @@ typedef GraphBLAS::Vector<U_TYPE> UVectorT;
 typedef GraphBLAS::VectorComplementView<GraphBLAS::Vector<U_TYPE>> UVectorT;
 #elif defined(A_VALUE)
 typedef A_TYPE AValueT;
+#elif defined(VAL_VALUE)
+typedef VAL_TYPE ValueT;
 #endif
 
 // right type
@@ -90,25 +92,7 @@ typedef GraphBLAS::AllIndices RSequenceT;
 typedef GraphBLAS::AllIndices CSequenceT;
 #endif
 
-#if defined(NO_ACCUM)
-typedef GraphBLAS::NoAccumulate AccumT;
-#else
-typedef GraphBLAS::ACCUM_BINARYOP<C_TYPE> AccumT;
-#endif
-
-#if defined(MIN_IDENTITY)
-#define A_IDENTITY std::numeric_limits<C_TYPE>::max()
-#elif defined(MONOID) || defined(SEMIRING)
-#define A_IDENTITY ADD_IDENTITY
-#endif
-
-#if (defined(APPLYMATRIX) || defined(APPLYVECTOR)) && defined(BOUND_CONST)
-typedef GraphBLAS::BinaryOp_Bind2nd<A_TYPE, GraphBLAS::UNARY_OP<A_TYPE, C_TYPE>> ApplyT;
-#elif defined(APPLYMATRIX) || defined(APPLYVECTOR)
-#define BOUND_CONST
-typedef GraphBLAS::UNARY_OP<A_TYPE, C_TYPE> ApplyT;
-#endif
-
+// TODO
 #if defined(U_TYPE)
 #define A_TYPE U_TYPE
 #endif
@@ -117,6 +101,36 @@ typedef GraphBLAS::UNARY_OP<A_TYPE, C_TYPE> ApplyT;
 #endif
 #if defined(W_TYPE)
 #define C_TYPE W_TYPE
+#elif defined(S_TYPE)
+#define C_TYPE S_TYPE
+#endif
+
+#if defined(NO_ACCUM)
+typedef GraphBLAS::NoAccumulate AccumT;
+#elif defined(C_TYPE)
+typedef GraphBLAS::ACCUM_BINARYOP<C_TYPE> AccumT;
+#elif defined(W_TYPE)
+typedef GraphBLAS::ACCUM_BINARYOP<W_TYPE> AccumT;
+#endif
+
+#if defined(MIN_IDENTITY)
+#define A_IDENTITY std::numeric_limits<C_TYPE>::max()
+#elif defined(MONOID) || defined(SEMIRING)
+#define A_IDENTITY ADD_IDENTITY
+#endif
+
+#if defined(APPLYMATRIX) && defined(BOUND_CONST)
+typedef GraphBLAS::BinaryOp_Bind2nd<A_TYPE, GraphBLAS::UNARY_OP<A_TYPE, C_TYPE>> ApplyT;
+#elif defined(APPLYMATRIX)
+#define BOUND_CONST
+typedef GraphBLAS::UNARY_OP<A_TYPE, C_TYPE> ApplyT;
+#endif
+
+#if defined(APPLYVECTOR) && defined(BOUND_CONST)
+typedef GraphBLAS::BinaryOp_Bind2nd<U_TYPE, GraphBLAS::UNARY_OP<U_TYPE, W_TYPE>> ApplyT;
+#elif defined(APPLYVECTOR)
+#define BOUND_CONST
+typedef GraphBLAS::UNARY_OP<U_TYPE, W_TYPE> ApplyT;
 #endif
 
 // TODO ensure that correct types compile these operators
@@ -317,7 +331,7 @@ void assignMatrixRow(
 void assignMatrixConst(
         CMatrixT          &C,
         MMatrixT    const &M,
-        ValueT     const &val,
+        ValueT      const &val,
         RSequenceT  const &row_indices,
         CSequenceT  const &col_indices,
         bool               replace_flag
@@ -338,7 +352,7 @@ void assignSubvector(
 void assignVectorConst(
         WVectorT        &w,
         MVectorT  const &m,
-        ValueT   const &val,
+        ValueT    const &val,
         SequenceT const &indices,
         bool             replace_flag
     )

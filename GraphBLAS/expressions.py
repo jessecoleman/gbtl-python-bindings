@@ -40,8 +40,11 @@ def capture_operators(eval):
         if accum:
             accum = get_accum()
 
-        if isinstance(C, (MaskedMatrix, MaskedVector)):
+        if isinstance(C, MaskedMatrix):
             return eval(expr, C.C, C.M, accum, replace_flag)
+
+        elif isinstance(C, MaskedVector):
+            return eval(expr, C.w, C.m, accum, replace_flag)
 
         else:
             return eval(expr, C, M, accum, replace_flag)
@@ -124,11 +127,12 @@ class MaskedMatrix(object):
 class MaskedVector(object):
 
     def __init__(self, w, m, replace_flag=False):
-        self.dtype = C.dtype
+        self.dtype = w.dtype
         self.w = w
         self.m = m
         self.accum = False
-        self.replace_flag = replace_flag
+        from .operators import get_replace
+        self.replace_flag = get_replace() #replace_flag
 
     # self.__setitem__(item, self.__getitem(item).__iadd__(value))
     def __iadd__(self, u):
@@ -594,8 +598,8 @@ class ReduceMatrix(_Expression):
             kwargs["s"] = self.reduce.identity
 
         # reduce to a scalar with initial value
-        elif (c_func.types.keys().index(self.A.dtype) <
-                c_func.types.keys().index(x)):
+        elif (list(c_func.types.keys()).index(self.A.dtype) <
+                list(c_func.types.keys()).index(type(x))):
             function = "reduceMatrix"
             kwargs["s"] = x
 
@@ -637,15 +641,14 @@ class ReduceVector(_Expression):
         if s is None:
             s = self.reduce.identity
 
-        elif (c_func.types.keys().index(self.A.dtype) >
-                c_func.types.keys().index(s)):
+        elif (list(c_func.types.keys()).index(self.u.dtype) >
+                list(c_func.types.keys()).index(type(s))):
             raise TypeError("Can't reduce to {}".format(type(s)))
 
         result = c_func.operator(
                 function        = "reduceVector",
                 operation       = self.op,
                 accum           = accum,
-                replace_flag    = replace_flag,
                 u               = self.u,
                 s               = s
         )

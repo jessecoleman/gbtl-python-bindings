@@ -1,4 +1,3 @@
-import attr
 from collections import OrderedDict
 import inspect
 import numpy as np

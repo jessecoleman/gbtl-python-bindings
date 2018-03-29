@@ -1,6 +1,7 @@
 import numpy as np
 from scipy import sparse
 from . import c_functions as c
+import networkx as nx
 
 NetworkXGraphs = [
        'DiGraph', 

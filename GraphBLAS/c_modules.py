@@ -19,7 +19,7 @@ FLAGS       = "-DHAVE_CONFIG_H -DGB_USE_SEQUENTIAL"
 CWD         = inspect.getfile(inspect.currentframe()).rsplit("/", 1)[0]
 sys.path.append(CWD)
 
-GB_SOURCE   = "/home/jessecoleman/gbtl/src"
+GB_SOURCE   = "/home/jessecoleman/gbtl/src/"
 MODULES     = os.path.abspath("{cwd}/modules".format(cwd=CWD))
 C_CODE      = os.path.abspath("{cwd}/c_code".format(cwd=CWD))
 #TODO dynamically configure this with cmake
@@ -51,7 +51,7 @@ def get_module(target, args, kwargs):
                 "GraphBLAS.modules.{mod}".format(mod=module)
         )
 
-    except ImportError:
+    except (ImportError, ModuleNotFoundError):
         print("building module {}".format(target))
 
     if not os.path.exists(MODULES):

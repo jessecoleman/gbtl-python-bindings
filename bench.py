@@ -17,8 +17,31 @@ import page_rank
 import sssp
 import triangle_count
 
+max_size = 12
 
-def bench_build():
+def bench_all():
+    fig, ax = plt.subplots(4, 1, sharex=True, figsize=(6,15))
+    print("bfs")
+    bench_bfs(ax[0])
+    print("page")
+    bench_page_rank(ax[1])
+    print("sssp")
+    bench_sssp(ax[2])
+    print("tri")
+    bench_tri(ax[3])
+
+    fig.text(0.5, 0.02, 'number of vertices (log scale)', ha='center', size=12)
+    fig.text(0.02, 0.5, 'time in seconds (log scale)', va='center', rotation='vertical', size=12)
+    fig.tight_layout()
+    plt.subplots_adjust(left=0.15, bottom=0.05)
+    
+    print("DONE")
+
+    pp = PdfPages('fig10.pdf')
+    pp.savefig(fig)
+    plt.savefig("fig10.png")
+ 
+def bench_build(ax=None):
 
     s, py1, py2, py3, cpp1, cpp2, cpp3 = [], [], [], [], [], [], []
 
@@ -63,7 +86,7 @@ def bench_build():
 
             end = time.time() - s
             print(end)
-            exit()
+            #exit()
 
         cpp1.append(np.mean(c1))
         cpp2.append(np.mean(c2))
@@ -163,11 +186,11 @@ def cpp_bfs(root):
     result = subprocess.check_output(["./bench_all", "matrix.txt", str(root)])
     return int(str(result).split()[1][:-1]) / 1000
 
-def bench_bfs():
+def bench_bfs(ax=None):
 
     x, y1, y1err, y2, y2err, y3, y3err = [], [], [], [], [], [], []
 
-    for i in [2**i for i in range(6, 14)]:
+    for i in [2**i for i in range(6, max_size)]:
 
         g = ntx.gnp_random_graph(i, i**(-1/2))
         i, j = zip(*g.edges())
@@ -240,29 +263,32 @@ def bench_bfs():
     
     x, y1, y1err, y2, y2err, y3, y3err = zip(*sorted(zip(x, y1, y1err, y2, y2err, y3, y3err)))
     
-    fig = plt.figure()
-    ax = fig.add_subplot(1,1,1)
+    if ax is None:
+        fig = plt.figure()
+        ax = fig.add_subplot(1,1,1)
+        ax.set_xlabel('Matrix size (log scale)')
+        ax.set_ylabel('Time in seconds (log scale)')
+ 
     ax.errorbar(x, y1, yerr=y1err, capsize=2, label="Python loops")
     ax.errorbar(x, y2, yerr=y3err, capsize=2, label="C++ loops")
     ax.errorbar(x, y3, yerr=y3err, capsize=2, label="C++ native")
     ax.set_xscale('log', basex=2)
     ax.set_yscale('log')
-    ax.set_xlabel('Matrix size (log scale)')
-    ax.set_ylabel('Time in seconds (log scale)')
-    ax.set_title('Breadth-first search algorithm')
+    ax.set_title('Breadth-first search')
 
     h, l = ax.get_legend_handles_labels()
     ax.legend(h,l)
-    
-    pp = PdfPages('bfs_rank_bench.pdf')
-    pp.savefig(fig)
-    plt.savefig("{}_bench.png".format("bfs"))
+
+    if ax is None:
+        pp = PdfPages('bfs_rank_bench.pdf')
+        pp.savefig(fig)
+        plt.savefig("{}_bench.png".format("bfs"))
  
-def bench_page_rank():
+def bench_page_rank(ax=None):
 
     x, y1, y1err, y2, y2err, y3, y3err = [], [], [], [], [], [], []
 
-    for i in [2**i for i in range(6, 14)]:
+    for i in [2**i for i in range(6, max_size)]:
 
         g = ntx.gnp_random_graph(i, i**(-1/2))
         i, j = zip(*g.edges())
@@ -329,29 +355,31 @@ def bench_page_rank():
 
     x, y1, y1err, y2, y2err, y3, y3err = zip(*sorted(zip(x, y1, y1err, y2, y2err, y3, y3err)))
    
-    fig = plt.figure()
-    ax = fig.add_subplot(1,1,1)
+    if ax is None:
+        fig = plt.figure()
+        ax = fig.add_subplot(1,1,1)
+        ax.set_xlabel('Matrix size (log scale)')
+        ax.set_ylabel('Time in seconds (log scale)')
+ 
     ax.errorbar(x, y1, yerr=y1err, capsize=2, label="Python loops")
     ax.errorbar(x, y2, yerr=y3err, capsize=2, label="C++ loops")
     ax.errorbar(x, y3, yerr=y3err, capsize=2, label="C++ native")
     ax.set_xscale('log', basex=2)
     ax.set_yscale('log')
-    ax.set_xlabel('Matrix size (log scale)')
-    ax.set_ylabel('Time in seconds (log scale)')
-    ax.set_title('PageRank algorithm')
+    ax.set_title('PageRank')
 
-    h, l = ax.get_legend_handles_labels()
-    ax.legend(h,l)
-    
-    pp = PdfPages('page_rank_bench.pdf')
-    pp.savefig(fig)
-    plt.savefig("{}_bench.png".format("page_rank"))
+    if ax is None:
+        h, l = ax.get_legend_handles_labels()
+        ax.legend(h,l)
+        pp = PdfPages('page_rank_bench.pdf')
+        pp.savefig(fig)
+        plt.savefig("{}_bench.png".format("page_rank"))
 
-def bench_sssp():
+def bench_sssp(ax=None):
 
     x, y1, y1err, y2, y2err, y3, y3err = [], [], [], [], [], [], []
 
-    for i in [2**i for i in range(6, 12)]:
+    for i in [2**i for i in range(6, max_size)]:
 
         g = ntx.gnp_random_graph(i, i**(-1/2))
         i, j = zip(*g.edges())
@@ -421,29 +449,32 @@ def bench_sssp():
 
     x, y1, y1err, y2, y2err, y3, y3err = zip(*sorted(zip(x, y1, y1err, y2, y2err, y3, y3err)))
     
-    fig = plt.figure()
-    ax = fig.add_subplot(1,1,1)
+    if ax is None:
+        fig = plt.figure()
+        ax = fig.add_subplot(1,1,1)
+        ax.set_xlabel('Matrix size (log scale)')
+        ax.set_ylabel('Time in seconds (log scale)')
+ 
     ax.errorbar(x, y1, yerr=y1err, capsize=2, label="Python loops")
     ax.errorbar(x, y2, yerr=y3err, capsize=2, label="C++ loops")
     ax.errorbar(x, y3, yerr=y3err, capsize=2, label="C++ native")
     ax.set_xscale('log', basex=2)
     ax.set_yscale('log')
-    ax.set_xlabel('Matrix size (log scale)')
-    ax.set_ylabel('Time in seconds (log scale)')
-    ax.set_title('SSSP algorithm')
+    ax.set_title('Single source shortest path')
 
-    h, l = ax.get_legend_handles_labels()
-    ax.legend(h,l)
+    if ax is None:
+        h, l = ax.get_legend_handles_labels()
+        ax.legend(h,l)
     
-    pp = PdfPages('sssp_bench.pdf')
-    pp.savefig(fig)
-    plt.savefig("{}_bench.png".format("sssp"))
+        pp = PdfPages('sssp_bench.pdf')
+        pp.savefig(fig)
+        plt.savefig("{}_bench.png".format("sssp"))
 
-def bench_tri():
+def bench_tri(ax=None):
 
     x, y1, y1err, y2, y2err, y3, y3err = [], [], [], [], [], [], []
 
-    for i in [2**i for i in range(6, 14)]:
+    for i in [2**i for i in range(6, max_size)]:
 
         g = ntx.gnp_random_graph(i, i**(-1/2))
         i, j = zip(*g.edges())
@@ -495,23 +526,26 @@ def bench_tri():
 
     x, y1, y1err, y2, y2err, y3, y3err = zip(*sorted(zip(x, y1, y1err, y2, y2err, y3, y3err)))
     
-    fig = plt.figure()
-    ax = fig.add_subplot(1,1,1)
+    if ax is None:
+        fig = plt.figure()
+        ax = fig.add_subplot(1,1,1)
+        ax.set_xlabel('Matrix size (log scale)')
+        ax.set_ylabel('Time in seconds (log scale)')
+ 
     ax.errorbar(x, y1, yerr=y1err, capsize=2, label="Python loops")
     ax.errorbar(x, y2, yerr=y3err, capsize=2, label="C++ loops")
     ax.errorbar(x, y3, yerr=y3err, capsize=2, label="C++ native")
     ax.set_xscale('log', basex=2)
     ax.set_yscale('log')
-    ax.set_xlabel('Matrix size (log scale)')
-    ax.set_ylabel('Time in seconds (log scale)')
-    ax.set_title('Triangle count algorithm')
+    ax.set_title('Triangle counting')
 
-    h, l = ax.get_legend_handles_labels()
-    ax.legend(h,l)
+    if ax is None:
+        h, l = ax.get_legend_handles_labels()
+        ax.legend(h,l)
     
-    pp = PdfPages('tricount_bench.pdf')
-    pp.savefig(fig)
-    plt.savefig("{}_bench.png".format("tricount"))
+        pp = PdfPages('tricount_bench.pdf')
+        pp.savefig(fig)
+        plt.savefig("{}_bench.png".format("tricount"))
 
 
 def bench_read_fromfile():
@@ -581,3 +615,6 @@ if __name__ == '__main__':
 
     elif sys.argv[1] == 'read':
         bench_read_fromfile()
+
+    elif sys.argv[1] == 'all':
+        bench_all()

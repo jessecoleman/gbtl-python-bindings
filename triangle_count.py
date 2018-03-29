@@ -29,7 +29,7 @@ def triangle_count_masked(graph):
     with ArithmeticSemiring:
         B[graph] = graph @ graph.T
 
-    sum = reduce(PlusMonoid, B).eval(0)
+    sum = reduce(PlusMonoid, B).eval(0.0)
 
     return sum
 
